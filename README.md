@@ -1,17 +1,22 @@
 # Agentic Payments Lab
 
-A deterministic, fully offline procurement engine that separates purchase decisions,
+A deterministic procurement simulator that separates purchase decisions,
 financial authorization, payment execution, and resource delivery.
 
-**Phase 1 is implemented. All payments and receipts are simulated.** There are no
-wallets, private keys, blockchain RPCs, payment facilitators, OpenAI calls, or live
-x402 integrations. `SIM-USDC` uses six decimal places for arithmetic exercises; it
+**Phase 1 is accepted; Phase 2 adds a bounded OpenAI SDK buyer. All payments and
+receipts remain simulated.** The buyer defaults to a credential-free scripted
+model through the actual SDK runner. Explicit live Responses acceptance checks passed
+for free acquisition, simulated paid acquisition, replay, and unaffordable refusal.
+These are bounded integration checks, not evidence of general model reliability.
+There are no wallets,
+private keys, blockchain RPCs, payment facilitators, or live x402 integrations.
+`SIM-USDC` uses six decimal places for arithmetic exercises; it
 is not USDC and has no monetary value. The only network identifier is
 `simulation:local`.
 
-The long-term project is an OpenAI Buyer Agent using Agents SDK / Responses and a
-restricted x402 V2 payment adapter. Those integrations require a separately approved
-phase. No alternative agent orchestration framework is used.
+The buyer uses the official Python Agents SDK with Responses and four bounded
+tools. Real payment integrations require another approved phase. No alternative
+agent orchestration framework is used.
 
 ## Quick start
 
@@ -24,8 +29,8 @@ uv sync --locked
 uv run --offline --no-sync payments-lab demo
 ```
 
-Dependency installation can use the internet. After installation, all application
-commands and tests run offline without credentials or environment variables.
+Dependency installation can use the internet. After installation, the Phase 1
+commands, offline buyer, and all tests run without credentials or networking.
 HTTPX invokes the FastAPI merchant through its in-process ASGI transport. No web
 server, port, Docker daemon, or network connection is required.
 
@@ -49,6 +54,31 @@ The paid result is `settled` / `delivered`; the unauthorized result is `denied` 
 `not_requested`. Repeating the command against the same state returns the same
 results without another charge. To run an independent demo, choose another
 directory with `payments-lab --state-dir /tmp/my-payment-demo demo`.
+
+## Bounded buyer (Phase 2)
+
+The operator creates a grant/task before running the agent. The following commands
+exercise the actual SDK runner with the deterministic scripted model:
+
+```bash
+uv run --offline --no-sync payments-lab --state-dir .lab/buyer init --budget 10000 --cap 10000
+uv run --offline --no-sync payments-lab --state-dir .lab/buyer task buyer-1
+uv run --offline --no-sync payments-lab --state-dir .lab/buyer agent-init buyer-1 \
+  --subject offline-report --purpose research --quality standard
+uv run --offline --no-sync payments-lab --state-dir .lab/buyer agent buyer-1 \
+  --mode offline --subject offline-report --purpose research --quality standard
+```
+
+The explicit `agent-init` operation binds subject, purpose and quality before any
+model request. Repeat the last command to inspect the same purchase without another
+charge. For another request, the operator must create a new task. `basic` selects
+the free report; `premium` with this grant
+reports no suitable affordable service. The agent cannot lower requested quality,
+create authority, reconcile, cancel, or replace an uncertain purchase.
+
+The report separates application-owned `purchase`/`decision` from untrusted
+`model_explanation`; API usage is separate from simulated spending. See
+[Phase 2 architecture, limits and live smoke evidence](docs/phase2.md).
 
 ## Inspect a purchase
 
@@ -133,15 +163,18 @@ unshare --user --map-root-user --net -- \
 
 The validator requires a new network namespace containing only loopback and checks
 that a child process inherits it. It then runs lockfile validation, Ruff, the full
-test suite, and two identical CLI demos. It checks the payment authority's SQLite
-records for one execution and one charge after both demos. Caches and simulation
+test suite, two identical Phase 1 demos, and repeated offline agent scenarios for
+free, paid and unaffordable requests. It checks the payment authority's SQLite
+records directly for expected execution/charge counts. Caches and simulation
 data are kept in a temporary directory outside the repository. Isolation setup or
 verification failure stops validation; there is no unrestricted fallback.
 
 The suite covers authorization tampering, expiration, budget limits, forged receipts,
 delivery recovery, 100 simultaneous identical retries, 20 competing purchases,
 real subprocess termination/restart at five durable boundaries, and audit snapshot
-consistency during reconciliation. Socket/DNS patches in tests provide additional
+consistency during reconciliation. Phase 2 tests cover narrow tool schemas, scoped
+quote handles, limits, malicious scripted output, and mocked Responses requests.
+Socket/DNS patches in tests provide additional
 checks but do not establish OS-level isolation. Likewise, `uv --offline` restricts
 dependency access, not application networking.
 
@@ -168,7 +201,8 @@ Actions after publishing an approved commit.
 ├── .github/workflows/ci.yml
 ├── docs/
 │   ├── architecture.md
-│   └── threat-model.md
+│   ├── threat-model.md
+│   └── phase2.md
 ├── scripts/
 │   └── validate_offline.py        # Fail-closed network checks and validation
 ├── src/agentic_payments_lab/
@@ -182,6 +216,7 @@ Actions after publishing an approved commit.
 │   ├── storage.py                # SQLite connection/transaction helpers
 │   ├── clock.py                  # Injectable deterministic clock
 │   ├── runtime.py                # Local component composition
+│   ├── buyer_agent/              # SDK runner, tool boundary, agent metadata, scripts
 │   ├── cli.py
 │   ├── __main__.py
 │   └── __init__.py
@@ -193,6 +228,16 @@ Runtime state lives in ignored `.lab/`: `ledger.sqlite3`, `payments.sqlite3`, an
 instance. Deleting only one database while retaining the others breaks recovery
 assumptions. For a fresh scenario use a new directory. Keep all three stores and
 their WAL state when preserving evidence; a safe backup procedure is future work.
+Agent commands additionally create ignored `agent.sqlite3` for immutable request
+bindings, task-scoped quote handles and sanitized run events. It has no financial
+authority; preserve it with the three simulator stores when retaining agent history.
+The buyer ledger independently retains the original agent binding. Missing metadata
+blocks agent execution; explicit `agent-recover TASK` restores only that original
+binding, never lost run/usage history. See [the recovery contract](docs/phase2.md).
+
+Run records persist pending requests and observed token totals incrementally. Agent
+cancellation is independent of payment/delivery state and propagates after best-effort
+cleanup. Unknown usage is marked incomplete; a hard crash may leave a running record.
 
 ## Limits and next phase
 
@@ -209,7 +254,7 @@ An uncertain outcome may remain reserved indefinitely until authoritative
 reconciliation. Availability is deliberately sacrificed when the result is unknown.
 
 See [architecture and recovery decisions](docs/architecture.md) and the
-[threat model](docs/threat-model.md). The proposed Phase 2 is a separately approved
-OpenAI Agents SDK / Responses integration against this simulator, with bounded
-tools and adversarial evaluations. Real x402, wallet custody, signing policy,
+[threat model](docs/threat-model.md). Phase 2 offline validation demonstrates runner
+and boundary behavior, not real-model reliability or prompt-injection resistance.
+Real x402, wallet custody, signing policy,
 facilitator selection, and Base testnet work remain later decisions.

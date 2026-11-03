@@ -184,8 +184,23 @@ class Budget(Model):
     available: Atomic
 
 
+class BuyerConstraints(Model):
+    grant: Grant
+    budget: Budget
+    revoked: bool
+    now: Timestamp
+
+
 class PurchaseConflict(ValueError):
     """A durable identifier was reused with different contents."""
+
+
+class AgentMetadataError(ValueError):
+    """Operator action is required before an agent may run."""
+
+    def __init__(self, code: Literal["agent_initialization_required", "agent_recovery_required"]):
+        self.code = code
+        super().__init__(code)
 
 
 class PolicyDenied(ValueError):

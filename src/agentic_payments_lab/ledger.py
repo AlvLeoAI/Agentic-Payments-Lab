@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from .domain import (
     Budget,
+    BuyerConstraints,
     DeliveryState,
     Grant,
     Identifier,
@@ -43,6 +44,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     grant_id TEXT NOT NULL,
     purchase_id TEXT NOT NULL UNIQUE
 );
+CREATE TABLE IF NOT EXISTS agent_bindings (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+    data TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS agent_bindings_no_update BEFORE UPDATE ON agent_bindings
+BEGIN SELECT RAISE(ABORT, 'agent bindings are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS agent_bindings_no_delete BEFORE DELETE ON agent_bindings
+BEGIN SELECT RAISE(ABORT, 'agent bindings are immutable'); END;
 CREATE TABLE IF NOT EXISTS purchases (
     purchase_id TEXT PRIMARY KEY,
     fingerprint TEXT NOT NULL,
@@ -147,6 +156,28 @@ class Ledger:
                 and row["intent"] == canonical(intent)
                 and row["payment_state"] in (PaymentState.EXECUTING, PaymentState.UNKNOWN)
             )
+
+    def agent_binding(self, task_id: str) -> str | None:
+        """Original operator binding, independent of the expendable agent run store."""
+        with self.db.connect() as db:
+            row = db.execute(
+                "SELECT data FROM agent_bindings WHERE task_id=?", (task_id,)
+            ).fetchone()
+            return row["data"] if row else None
+
+    def initialize_agent(self, task_id: str, binding: str) -> None:
+        """Operator-only enrollment. No grant, purchase or accounting changes."""
+        with self.db.transaction() as db:
+            task = db.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+            if not task:
+                raise KeyError(task_id)
+            if db.execute("SELECT 1 FROM agent_bindings WHERE task_id=?", (task_id,)).fetchone():
+                raise PurchaseConflict("Agent already initialized; inspect or recover its metadata")
+            if db.execute(
+                "SELECT 1 FROM purchases WHERE purchase_id=?", (task["purchase_id"],)
+            ).fetchone():
+                raise PurchaseConflict("Initial agent binding requires an unpurchased task")
+            db.execute("INSERT INTO agent_bindings VALUES(?,?)", (task_id, binding))
 
     def record_quote(self, quote: Quote) -> None:
         with self.db.transaction() as db:
@@ -372,8 +403,9 @@ class Ledger:
                     now,
                 )
 
-    def record(self, purchase_id: str) -> dict:
-        with self.db.connect() as db:
+    def record(self, purchase_id: str, *, timeout: float | None = None) -> dict:
+        connection = self.db.connect() if timeout is None else self.db.connect(timeout=timeout)
+        with connection as db:
             row = db.execute(
                 "SELECT * FROM purchases WHERE purchase_id=?", (purchase_id,)
             ).fetchone()
@@ -381,8 +413,8 @@ class Ledger:
                 raise KeyError(purchase_id)
             return dict(row)
 
-    def outcome(self, purchase_id: str) -> PurchaseOutcome:
-        row = self.record(purchase_id)
+    def outcome(self, purchase_id: str, *, timeout: float | None = None) -> PurchaseOutcome:
+        row = self.record(purchase_id, timeout=timeout)
         return PurchaseOutcome(
             purchase_id=purchase_id,
             payment_state=row["payment_state"],
@@ -408,6 +440,24 @@ class Ledger:
                 reserved=row["reserved"],
                 spent=row["spent"],
                 available=row["budget"] - row["reserved"] - row["spent"],
+            )
+
+    def buyer_constraints(self, grant_id: str, now: int) -> BuyerConstraints:
+        """Read-only grant/accounting summary from one database row."""
+        with self.db.connect() as db:
+            row = db.execute("SELECT * FROM grants WHERE grant_id=?", (grant_id,)).fetchone()
+            if not row:
+                raise KeyError(grant_id)
+            return BuyerConstraints(
+                grant=Grant.model_validate_json(row["data"]),
+                budget=Budget(
+                    limit=row["budget"],
+                    reserved=row["reserved"],
+                    spent=row["spent"],
+                    available=row["budget"] - row["reserved"] - row["spent"],
+                ),
+                revoked=bool(row["revoked"]),
+                now=now,
             )
 
     def audit(self, purchase_id: str | None = None) -> list[dict]:

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from .clock import FixedClock
 from .domain import (
+    AgentMetadataError,
     Grant,
     PolicyDenied,
     PurchaseConflict,
@@ -75,7 +76,7 @@ async def demo(runtime: Runtime) -> dict:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        description="Offline payment simulation; no wallets or network"
+        description="Simulated payments; offline by default, with an explicit live OpenAI buyer"
     )
     result.add_argument("--state-dir", type=Path, default=Path(".lab"))
     result.add_argument(
@@ -87,6 +88,39 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     commands.add_parser("demo", help="Repeatable paid and unauthorized examples")
     commands.add_parser("list", help="Approved catalog and schemas")
+    agent = commands.add_parser("agent", help="Bounded SDK buyer over simulated payments")
+    agent.add_argument("task_id", help="Existing operator-created task; reused on every run")
+    agent.add_argument("--subject", required=True)
+    agent.add_argument("--purpose", required=True)
+    agent.add_argument("--quality", choices=("basic", "standard", "premium"), required=True)
+    agent.add_argument("--mode", choices=("offline", "live"), default="offline")
+    agent.add_argument("--model", help="Required in live mode; no default or fallback")
+    agent.add_argument(
+        "--reasoning-effort",
+        choices=("none", "minimal", "low", "medium", "high", "xhigh", "max"),
+        help="Explicit model reasoning effort; omitted by default (model support varies)",
+    )
+    agent.add_argument(
+        "--service-tier",
+        choices=("auto", "default", "flex", "scale", "priority", "fast", "ultrafast"),
+        help="Explicit API processing tier; use default for Standard; omitted by default",
+    )
+    agent.add_argument(
+        "--timeout", type=float, default=30, help="Run timeout in seconds (0 < n <= 120)"
+    )
+    agent.add_argument("--max-turns", type=int, default=10)
+    agent.add_argument("--max-output-tokens", type=int, default=512)
+    initialize = commands.add_parser(
+        "agent-init", help="Operator: attest first agent use and bind an unpurchased task"
+    )
+    initialize.add_argument("task_id")
+    initialize.add_argument("--subject", required=True)
+    initialize.add_argument("--purpose", required=True)
+    initialize.add_argument("--quality", choices=("basic", "standard", "premium"), required=True)
+    recover = commands.add_parser(
+        "agent-recover", help="Operator: restore missing binding from its ledger witness"
+    )
+    recover.add_argument("task_id")
     init = commands.add_parser("init", help="Operator: create an immutable spending grant")
     init.add_argument("--grant-id", default="local-grant")
     init.add_argument("--budget", type=int, default=40_000)
@@ -116,6 +150,41 @@ def parser() -> argparse.ArgumentParser:
 
 async def run(args: argparse.Namespace) -> dict | list:
     runtime = Runtime(args.state_dir, clock=FixedClock(args.now))
+    if args.command in ("agent-init", "agent-recover"):
+        from .buyer_agent.contracts import Goal
+        from .buyer_agent.store import AgentStore
+
+        store = AgentStore(args.state_dir / "agent.sqlite3")
+        if args.command == "agent-init":
+            store.initialize(
+                runtime.ledger,
+                args.task_id,
+                Goal(subject=args.subject, purpose=args.purpose, quality=args.quality),
+            )
+        else:
+            store.recover(runtime.ledger, args.task_id)
+        return {"task_id": args.task_id, "operation": args.command, "binding_available": True}
+    if args.command == "agent":
+        # Lazy import preserves the Phase 1 commands' independence from the SDK.
+        from .buyer_agent.contracts import Goal, Settings
+        from .buyer_agent.runner import run_buyer
+        from .buyer_agent.store import AgentStore
+
+        report = await run_buyer(
+            runtime.buyer(args.task_id),
+            AgentStore(args.state_dir / "agent.sqlite3"),
+            Goal(subject=args.subject, purpose=args.purpose, quality=args.quality),
+            Settings(
+                mode=args.mode,
+                model=args.model,
+                reasoning_effort=args.reasoning_effort,
+                service_tier=args.service_tier,
+                timeout_seconds=args.timeout,
+                max_turns=args.max_turns,
+                max_output_tokens=args.max_output_tokens,
+            ),
+        )
+        return report.model_dump(mode="json")
     if args.command == "demo":
         return await demo(runtime)
     if args.command == "list":
@@ -145,7 +214,10 @@ def main() -> int:
     args = parser().parse_args()
     try:
         result = asyncio.run(run(args))
-    except (KeyError, ValidationError, PolicyDenied, PurchaseConflict, httpx.HTTPError):
+    except AgentMetadataError as exc:
+        print(json.dumps({"mode": "simulated", "error": exc.code}))
+        return 2
+    except (KeyError, ValueError, ValidationError, PolicyDenied, PurchaseConflict, httpx.HTTPError):
         # Do not print raw exceptions, request bodies, credentials, or receipts.
         print(json.dumps({"mode": "simulated", "error": "invalid_or_conflicting_operation"}))
         return 2

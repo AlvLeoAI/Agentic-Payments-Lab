@@ -18,7 +18,7 @@ must not be exposed as a public HTTP service without a new security design.
 
 | Threat | Implemented defense | Remaining limitation |
 | --- | --- | --- |
-| Prompt injection or invented justification | Typed request; exact grant purpose/service checks; no text-derived authority; fixed task binding | No model is integrated, so actual model/tool behavior remains untested |
+| Prompt injection or invented justification | Typed request; exact grant purpose/service checks; no text-derived authority; fixed task binding; narrow Phase 2 tools | Scripted adversarial tests validate boundaries, not a real model's resistance |
 | Model invents a new purchase ID or grant | Host registers task and computes ID; buyer has no task/grant management methods | Host tool registration must maintain this boundary; Python is not sandboxed |
 | Malicious merchant, recipient, network, or token | Every quote term is compared with operator catalog before reservation and again before dispatch | Catalog governance is trusted; there is no remote merchant identity system |
 | Price substitution / arithmetic errors | Fixed catalog price, strict bounded integer atomic units, six decimals, no floats | Real fees, exchange rates, slippage, and token contracts are out of scope |
@@ -33,9 +33,9 @@ must not be exposed as a public HTTP service without a new security design.
 | Process crashes or lost response | Durable dispatch marker, authoritative lookup, retained reservation, explicit reconciliation | Unknown can persist indefinitely; local cancellation proof has no automatic blockchain equivalent |
 | Releasing unknown exposure while executor is delayed | Atomic simulator cancellation tombstone fences late execution | Future adapters must prove equivalent fencing or retain exposure |
 | Malformed/corrupt resource | Typed schema plus request, service, quality, receipt and digest validation | A digest cannot establish truthfulness of merchant prose; content must stay untrusted for an LLM |
-| Secret/proof leakage in logs | No credentials; no raw exception logging; allowlisted audit export; CLI uses receipt IDs | Raw database records contain full simulated receipts and request content; no encryption at rest |
+| Secret/proof leakage in logs | No payment credentials; no raw exception logging; allowlisted audit export; CLI uses receipt IDs; agent tracing disabled | Live OpenAI credentials stay in environment/client memory; raw database records contain simulated receipts and request content; no encryption at rest |
 | Audit rewriting | Append-only SQL triggers; policy/quote/request snapshots | Not tamper-evident against privileged database/file modification |
-| Simulation silently becomes real payments | No real network/token configuration, no SDKs, no signing path or wallet keys | Later implementation must undergo explicit human authorization and a new threat review |
+| Simulation silently becomes real payments | No real payment network/token configuration, no signing path or wallet keys | The Phase 2 SDK calls only OpenAI in explicit live mode; real payments require new authorization and review |
 
 ## Failure policy
 
@@ -65,3 +65,11 @@ intact local SQLite stores. Tests do not establish blockchain finality, cryptogr
 correctness, merchant honesty, host security, backup safety, model robustness, or
 compliance. No wallets, private keys, real payment proofs, or network transactions
 are involved.
+
+Phase 2 adds a bounded model interface without extending payment authority. Merchant
+descriptions and delivered prose are omitted from model context. Tool arguments
+cannot change trusted context or payment terms; scoped handles resolve stored quotes.
+The application enforces eligible lowest-cost selection again before purchase.
+Unavailable administration tools and parallel batches terminate the run. See
+[Phase 2 limits and residual risks](phase2.md), including live API cost and the
+difference between scripted tests and real-model security evaluation.

@@ -6,6 +6,7 @@ from enum import StrEnum
 from .catalog import Catalog
 from .clock import Clock
 from .domain import (
+    BuyerConstraints,
     DeliveryRequest,
     DeliveryState,
     PaymentIntent,
@@ -15,6 +16,7 @@ from .domain import (
     Quote,
     Resolution,
     SimulatedReceipt,
+    TaskContext,
     digest,
 )
 from .ledger import Ledger
@@ -143,7 +145,7 @@ class Coordinator:
 
 
 class BuyerSession:
-    """Proposed future tool surface, bound by the application to a single task.
+    """Operations bound by the application to a single task.
 
     This is an API boundary, not a Python sandbox. A model must only receive tool
     schemas/callables, never Python execution or access to the Runtime object.
@@ -161,5 +163,23 @@ class BuyerSession:
     async def purchase(self, request: PurchaseRequest, quote: Quote) -> PurchaseOutcome:
         return await self._coordinator.purchase(self._task.task_id, request, quote)
 
-    def status(self) -> PurchaseOutcome:
-        return self._coordinator.ledger.outcome(self._task.purchase_id)
+    def status(self, *, timeout: float | None = None) -> PurchaseOutcome:
+        return self._coordinator.ledger.outcome(self._task.purchase_id, timeout=timeout)
+
+    def agent_binding(self) -> str | None:
+        return self._coordinator.ledger.agent_binding(self._task.task_id)
+
+    @property
+    def context(self) -> TaskContext:
+        return self._task
+
+    def constraints(self) -> BuyerConstraints:
+        return self._coordinator.ledger.buyer_constraints(
+            self._task.grant_id, self._coordinator.clock.now()
+        )
+
+    def status_or_none(self, *, timeout: float | None = None) -> PurchaseOutcome | None:
+        try:
+            return self.status(timeout=timeout)
+        except KeyError:
+            return None

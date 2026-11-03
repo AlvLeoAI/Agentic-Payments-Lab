@@ -144,8 +144,9 @@ against an administrator editing files or dropping triggers.
 
 Locked initial environment: Python 3.12; FastAPI 0.162.0, HTTPX 0.28.1, Pydantic
 2.14.1; pytest 9.1.1 and Ruff 0.17.2 for development. `uv.lock` is authoritative
-for these and transitive dependencies. No orchestration, wallet, blockchain, or
-payment-provider SDK is installed.
+for these and transitive dependencies. Phase 2 adds pinned `openai-agents==0.24.0`
+and `openai==3.42.1` outside this financial domain. No wallet, blockchain, or
+payment-provider SDK is installed. See [the Phase 2 layer](phase2.md).
 
 Relevant implementation documentation:
 
@@ -163,15 +164,21 @@ simulation; a real adapter needs an explicit typed outcome/evidence model and it
 own conformance tests. This is not a claim that real payments can be added by swapping
 one class unchanged.
 
-## Proposed Phase 2 approval boundary
+## Phase 2 integration boundary
 
-Approve an OpenAI-only buyer integration against this simulator first. The host
-creates the grant/task and wraps the four `BuyerSession` methods as bounded tools.
-The model may choose a service and subject but cannot create authority. Add tool
-argument validation, turn/tool-call limits, cost tracking independent of purchase
-budgets, prompt-injection fixtures, and deterministic replay of tool calls. Keep
-model traces separate from authoritative financial records, with redaction and
-an explicit retention policy.
+The approved buyer integration wraps `BuyerSession` in four narrow tools. The host
+binds subject, purpose, requested quality, task and grant; the model may request a
+service and an application-issued quote handle. Read-only `context`, `constraints`
+and `status_or_none` accessors avoid private internals. They add no financial
+transition or dispatch path. The grant/budget summary reads one SQLite row.
+Tool limits, SDK turn limits, disabled tracing, sanitized metadata and usage reporting
+are implemented in `buyer_agent/`. Reports read authoritative purchase state even
+after model failure. Operator-only `agent-init` writes an immutable binding witness
+in the ledger before the matching agent-store copy. `agent-recover` restores only
+that original binding; execution refuses missing history. Run/request checkpoints
+preserve partial usage, including best-effort cancellation evidence, without changing
+payment transitions. See [initialization and recovery limits](phase2.md) and the
+bounded live acceptance evidence for free/paid simulation, replay and refusal.
 
 Before any network payment phase, separately approve network/testnet, asset contract,
 wallet/custody design, signing controls, facilitator trust, quote/receipt validation,

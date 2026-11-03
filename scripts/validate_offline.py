@@ -107,6 +107,90 @@ def validate(uv: str) -> None:
             flush=True,
         )
 
+        scenarios = (
+            ("free", "basic", 0, 0, "not_required", 0),
+            ("paid", "standard", 10_000, 10_000, "settled", 10_000),
+            ("unaffordable", "premium", 10_000, 10_000, "not_started", None),
+        )
+        for label, quality, budget, cap, expected_state, expected_amount in scenarios:
+            agent_state = temporary / f"agent-{label}"
+            cli = (
+                "run",
+                "--offline",
+                "--no-sync",
+                "payments-lab",
+                "--state-dir",
+                str(agent_state),
+            )
+            run(*cli, "init", "--budget", str(budget), "--cap", str(cap), capture=True)
+            run(*cli, "task", "agent-task", capture=True)
+            run(
+                *cli,
+                "agent-init",
+                "agent-task",
+                "--subject",
+                "offline-validation",
+                "--purpose",
+                "research",
+                "--quality",
+                quality,
+                capture=True,
+            )
+            command = (
+                *cli,
+                "agent",
+                "agent-task",
+                "--mode",
+                "offline",
+                "--subject",
+                "offline-validation",
+                "--purpose",
+                "research",
+                "--quality",
+                quality,
+            )
+            reports = [json.loads(run(*command, capture=True).stdout) for _ in range(2)]
+            if (
+                any(report["termination"] != "completed" for report in reports)
+                or reports[0]["purchase"] != reports[1]["purchase"]
+                or reports[0]["purchase"]["payment_state"] != expected_state
+                or reports[0]["purchase"]["amount_atomic"] != expected_amount
+            ):
+                raise SystemExit(f"Offline agent scenario failed: {label}")
+            with sqlite3.connect(
+                f"file:{agent_state / 'payments.sqlite3'}?mode=ro", uri=True
+            ) as db:
+                outcomes = [
+                    json.loads(row[0]) for row in db.execute("SELECT result FROM authorizations")
+                ]
+                attempts = db.execute("SELECT count(*) FROM attempts").fetchone()[0]
+            charges = sum(outcome["status"] == "settled" for outcome in outcomes)
+            amount = sum(
+                outcome["receipt"]["intent"]["amount"]
+                for outcome in outcomes
+                if outcome["status"] == "settled"
+            )
+            expected_count = 1 if label == "paid" else 0
+            if (attempts, charges, amount) != (
+                expected_count,
+                expected_count,
+                expected_amount or 0,
+            ):
+                raise SystemExit(f"Offline agent authority invariant failed: {label}")
+            print(
+                json.dumps(
+                    {
+                        "offline_agent_scenario": label,
+                        "agent_runs": 2,
+                        "same_purchase": True,
+                        "execution_attempts": attempts,
+                        "authority_charges": charges,
+                        "charged_atomic": amount,
+                    }
+                ),
+                flush=True,
+            )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

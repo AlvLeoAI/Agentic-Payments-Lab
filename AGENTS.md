@@ -4,8 +4,10 @@ Phase 1 remains an offline payment simulation. Phase 2 authorizes an OpenAI
 Agents SDK / Responses buyer over that simulator. Live OpenAI calls require
 separate explicit authorization; offline validation must never need credentials.
 Phase 3B.1 permits offline x402 v2 validation and a durable gate exercised only
-with injected signer/dispatcher doubles. Do not enable live blockchain, wallet,
-cryptographic signing, RPC, x402 HTTP transport, or facilitator integrations.
+with injected signer/dispatcher doubles. Phase 3B.2 adds the explicitly enrolled
+ASGI-only merchant, durable request/nonce bindings and settlement doubles. Do not
+enable live blockchain, wallet, cryptographic signing, RPC, external x402 HTTP
+transport, or facilitator integrations.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the locked environment with `uv sync --locked`.
@@ -29,4 +31,8 @@ cryptographic signing, RPC, x402 HTTP transport, or facilitator integrations.
   dispatch fencing and reservations until conclusive evidence. No automatic
   re-signing, resend, recovery or backend switching. Offline evidence is not
   blockchain settlement. Resolve the SQLite WAL-reset patch blocker before live use.
+- Preserve merchant settlement claims and identity/nonce tombstones across restart
+  and cache expiry. Never retry settlement or reconstruct lost signatures. Merchant
+  observations/cached delivery cannot settle buyer accounting. Retrieval and explicit
+  deterministic cache recovery are non-charging and stay inside trusted ASGI/host code.
 - Do not commit secrets or runtime databases. Do not commit or push without user approval.

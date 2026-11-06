@@ -20,7 +20,13 @@ class DispatcherDouble(Protocol):
     mode: Literal["offline_double"]
 
     async def dispatch(
-        self, *, resource: str, method: str, request: PurchaseRequest, payment_header: str
+        self,
+        *,
+        resource: str,
+        method: str,
+        request: PurchaseRequest,
+        purchase_id: str,
+        payment_header: str,
     ) -> object: ...
 
 
@@ -35,10 +41,15 @@ class OfflineGate:
         signer: SignerDouble,
         dispatcher: DispatcherDouble,
         clock: Callable[[], int],
+        *,
+        identified: bool = False,
     ):
         if signer.mode != "offline_double" or dispatcher.mode != "offline_double":
             raise GateDenied("only_offline_doubles_allowed")
         self.store, self.signer, self.dispatcher, self.clock = store, signer, dispatcher, clock
+        if type(identified) is not bool:
+            raise GateDenied("invalid_offline_profile")
+        self.identified = identified
 
     async def run(
         self, task_id: str, header: str, *, resource: str, method: str, status_code: int = 402
@@ -49,6 +60,7 @@ class OfflineGate:
             resource=resource,
             method=method,
             status_code=status_code,
+            identified=self.identified,
         )
         # All validation and the commit precede the first await/side effect.
         try:
@@ -70,7 +82,9 @@ class OfflineGate:
             # must not restore dispatch authority to the canceled caller.
             if asyncio.current_task().cancelling():
                 raise asyncio.CancelledError
-            payment_header = transient_header(self.store.policy, terms, signature, self.clock())
+            payment_header = transient_header(
+                self.store.policy, terms, signature, self.clock(), identified=self.identified
+            )
             if self.store.authorize_dispatch(owner, terms, self.clock()):
                 with self.store.db.connect() as db:
                     request = PurchaseRequest.model_validate_json(
@@ -82,6 +96,7 @@ class OfflineGate:
                     resource=self.store.policy.resource,
                     method=self.store.policy.method,
                     request=request,
+                    purchase_id=terms.purchase_id,
                     payment_header=payment_header,
                 )
                 self.store.inconclusive(terms, self.clock())

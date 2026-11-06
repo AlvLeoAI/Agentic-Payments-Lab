@@ -5,18 +5,23 @@ import binascii
 import json
 from dataclasses import dataclass, field
 
+from x402.extensions.payment_identifier import (
+    append_payment_identifier_to_extensions,
+    declare_payment_identifier_extension,
+)
 from x402.http.utils import decode_payment_required_header, encode_payment_signature_header
 from x402.schemas import PaymentPayload, PaymentRequired
 
 from ..domain import digest
 from ..x402_contracts import GateDenied, OperatorPolicy, SigningTerms
+from ..x402_merchant_contracts import payment_identifier
 
 MAX_HEADER_BYTES = 8192
 MAX_DECODED_BYTES = 6144
 
 
-def required_data(policy: OperatorPolicy) -> dict:
-    return {
+def required_data(policy: OperatorPolicy, *, identified: bool = False) -> dict:
+    data = {
         "x402Version": 2,
         "resource": {"url": policy.resource},
         "accepts": [
@@ -31,6 +36,18 @@ def required_data(policy: OperatorPolicy) -> dict:
             }
         ],
     }
+    if identified:
+        data["extensions"] = {
+            "payment-identifier": declare_payment_identifier_extension(required=True)
+        }
+    return data
+
+
+def payment_extensions(purchase_id: str) -> dict:
+    return append_payment_identifier_to_extensions(
+        {"payment-identifier": declare_payment_identifier_extension(required=True)},
+        payment_identifier(purchase_id),
+    )
 
 
 def _unique_object(pairs):
@@ -57,7 +74,13 @@ def _same_types_and_values(actual, expected):
 
 
 def validate_required(
-    header: str, *, policy: OperatorPolicy, resource: str, method: str, status_code: int = 402
+    header: str,
+    *,
+    policy: OperatorPolicy,
+    resource: str,
+    method: str,
+    status_code: int = 402,
+    identified: bool = False,
 ) -> str:
     """No selection fallback or coercion. Return only an approved requirements hash."""
     if type(status_code) is not int or status_code != 402:
@@ -71,7 +94,7 @@ def validate_required(
         if len(raw) > MAX_DECODED_BYTES:
             raise ValueError("decoded_size")
         data = json.loads(raw, object_pairs_hook=_unique_object)
-        expected = required_data(policy)
+        expected = required_data(policy, identified=identified)
         if not _same_types_and_values(data, expected):
             raise ValueError("unapproved_terms")
         # SDK models alone allow coercion/defaults/unknown fields. Validate locally
@@ -103,13 +126,18 @@ class OfflineSignature:
 
 
 def transient_header(
-    policy: OperatorPolicy, terms: SigningTerms, signature: OfflineSignature, now: int
+    policy: OperatorPolicy,
+    terms: SigningTerms,
+    signature: OfflineSignature,
+    now: int,
+    *,
+    identified: bool = False,
 ) -> str:
     terms.validate_policy(policy, now)
     if type(signature) is not OfflineSignature:
         raise GateDenied("only_offline_signature_markers_allowed")
-    required = PaymentRequired.model_validate(required_data(policy))
-    if terms.requirements_hash != digest(required_data(policy)):
+    required = PaymentRequired.model_validate(required_data(policy, identified=identified))
+    if terms.requirements_hash != digest(required_data(policy, identified=identified)):
         raise GateDenied("requirements_changed")
     return encode_payment_signature_header(
         PaymentPayload(
@@ -117,5 +145,6 @@ def transient_header(
             accepted=required.accepts[0],
             resource=required.resource,
             payload={"authorization": terms.authorization(), "signature": signature.marker},
+            extensions=payment_extensions(terms.purchase_id) if identified else None,
         )
     )

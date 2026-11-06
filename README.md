@@ -19,6 +19,14 @@ USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
 It is not wired to the agent or CLI. See [scope, evidence and recovery](docs/phase3b1.md),
 including the unresolved SQLite WAL-reset patch prerequisite for live use.
 
+**Phase 3B.2 adds offline merchant integration** through FastAPI and HTTPX ASGI:
+explicit host enrollment, the required payment-identifier extension, durable
+request/nonce binding, one settlement-double invocation per committed claim, and
+non-charging cached retrieval. Pending or interrupted attempts never retry settlement.
+Merchant-reported success does not settle buyer accounting. There is no agent/CLI
+backend switch, real signer or facilitator connection. See the
+[offline merchant contract and failure matrix](docs/phase3b2.md).
+
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
 agent orchestration framework is used.

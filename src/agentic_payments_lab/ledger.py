@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
+from .buyer_schema import SIMULATION_PROFILE, open_buyer_database
 from .domain import (
     Budget,
     BuyerConstraints,
@@ -26,7 +27,6 @@ from .domain import (
     digest,
 )
 from .policy import Policy
-from .storage import Database
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS grants (
@@ -87,7 +87,7 @@ BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
 
 class Ledger:
     def __init__(self, path: Path, policy: Policy):
-        self.db = Database(path, SCHEMA)
+        self.db = open_buyer_database(path, SCHEMA, SIMULATION_PROFILE, initialize=True)
         self.policy = policy
 
     @staticmethod
@@ -462,10 +462,12 @@ class Ledger:
 
     def audit(self, purchase_id: str | None = None) -> list[dict]:
         with self.db.connect() as db:
-            rows = db.execute(
-                "SELECT * FROM events WHERE (? IS NULL OR purchase_id=?) ORDER BY sequence",
-                (purchase_id, purchase_id),
-            ).fetchall()
+            if purchase_id is None:
+                rows = db.execute("SELECT * FROM events ORDER BY sequence").fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT * FROM events WHERE purchase_id=? ORDER BY sequence", (purchase_id,)
+                ).fetchall()
             return [{**dict(row), "data": json.loads(row["data"])} for row in rows]
 
     def reconciliation_started(self, purchase_id: str, cancel: bool, now: int) -> None:

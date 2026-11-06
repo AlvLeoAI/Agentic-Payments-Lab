@@ -11,8 +11,13 @@ These are bounded integration checks, not evidence of general model reliability.
 There are no wallets,
 private keys, blockchain RPCs, payment facilitators, or live x402 integrations.
 `SIM-USDC` uses six decimal places for arithmetic exercises; it
-is not USDC and has no monetary value. The only network identifier is
-`simulation:local`.
+is not USDC and has no monetary value. Simulator tasks use `simulation:local`.
+
+**Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
+signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
+USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
+It is not wired to the agent or CLI. See [scope, evidence and recovery](docs/phase3b1.md),
+including the unresolved SQLite WAL-reset patch prerequisite for live use.
 
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
@@ -248,8 +253,13 @@ exactly-once payment or real blockchain finality. Python objects and local datab
 permissions are trusted; the process is not a sandbox and audit triggers are not
 tamper-proof against a filesystem administrator.
 
-There is no authentication, encryption at rest, schema migration system, background
+There is no authentication, encryption at rest, general migration framework, background
 reconciler, automated refund, live wall-clock service, or distributed deployment.
+The buyer file has narrow additive upgrades from the exact Phase 2 and initial
+Phase 3B.1 schemas; version 2 adds durable cancellation before an offline claim.
+Unknown/incomplete schemas are rejected before persistent journal changes.
+Use fresh development state and review the
+[upgrade procedure](docs/phase3b1.md#persistence-and-upgrade) before opening retained state.
 An uncertain outcome may remain reserved indefinitely until authoritative
 reconciliation. Availability is deliberately sacrificed when the result is unknown.
 

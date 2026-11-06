@@ -6,10 +6,15 @@ from pathlib import Path
 
 
 class Database:
-    def __init__(self, path: Path, schema: str, *, timeout: float = 30):
+    def __init__(self, path: Path, schema: str, *, timeout: float = 30, defer_setup: bool = False):
         self.path = Path(path)
         self.timeout = timeout
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if defer_setup:
+            # The versioned buyer opener validates/migrates before enabling WAL.
+            if schema:
+                raise ValueError("Deferred setup requires an empty schema")
+            return
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA synchronous=FULL")

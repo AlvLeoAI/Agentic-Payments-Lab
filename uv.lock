@@ -12,6 +12,7 @@ dependencies = [
     { name = "openai" },
     { name = "openai-agents" },
     { name = "pydantic" },
+    { name = "x402" },
 ]
 
 [package.dev-dependencies]
@@ -27,6 +28,7 @@ requires-dist = [
     { name = "openai", specifier = "==3.42.1" },
     { name = "openai-agents", specifier = "==0.24.0" },
     { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "x402", specifier = "==2.27.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -428,6 +430,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nest-asyncio"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
+]
+
+[[package]]
 name = "openai"
 version = "3.42.1"
 source = { registry = "https://pypi.org/simple" }
@@ -809,4 +820,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/37/a1/4cf892007778eaf84ad162bfc98046e0ed89b63ac55949e3236626b2a23f/websockets-16.1.1-cp312-cp312-win32.whl", hash = "sha256:1d27fa8462ad6a1cb36206a3d0640b2333340def181fae11ed7f9adeaa5c0747", size = 179943, upload-time = "2026-07-17T22:49:36.213Z" },
     { url = "https://files.pythonhosted.org/packages/d9/de/6abe251d28c3a3f217096575400b27750b18e0b1d2fff3a2a239960fea07/websockets-16.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:b436f6ec4fc3a6b4237c84d3f83170ed2b40bb584222f0ac47a0c8a5921980c7", size = 180243, upload-time = "2026-07-17T22:49:37.626Z" },
     { url = "https://files.pythonhosted.org/packages/be/4d/2d0d67834092e354d2b0498f014a41249a89556bc406cf86f3e1557bb463/websockets-16.1.1-py3-none-any.whl", hash = "sha256:6abbd3e82c731c8e531714466acd5d87b5e88ac3243465337ba71d68e23ae7e3", size = 173814, upload-time = "2026-07-17T22:51:04.184Z" },
+]
+
+[[package]]
+name = "x402"
+version = "2.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nest-asyncio" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/b4/8053e5da3340423a27ae5a85133a88c32351775bbd6d43c5045cef773332/x402-2.27.0.tar.gz", hash = "sha256:cd322186f2ddac64a5c5eed2787bba978db0abe1d681f251528fa3c53fa37a98", size = 2348879, upload-time = "2026-11-04T20:03:28.46Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/2d/2072cc6f83ffb6746e4838362f1889ff0be6aea442aac8710f47d4b33828/x402-2.27.0-py3-none-any.whl", hash = "sha256:df76cac8ca44c6d73896f1759547f66acb06918f1f7da4a46836021f7f79f7f5", size = 2492709, upload-time = "2026-11-04T20:03:25.665Z" },
 ]

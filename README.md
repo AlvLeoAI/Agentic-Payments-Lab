@@ -16,7 +16,7 @@ is not USDC and has no monetary value. Simulator tasks use `simulation:local`.
 **Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
 signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
 USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
-It is not wired to the agent or CLI. See [scope, evidence and recovery](docs/phase3b1.md),
+The original slice is separate from the agent/CLI. See [scope, evidence and recovery](docs/phase3b1.md),
 including the unresolved SQLite WAL-reset patch prerequisite for live use.
 
 **Phase 3B.2 adds offline merchant integration** through FastAPI and HTTPX ASGI:
@@ -40,8 +40,16 @@ fixture-settled purchase. A non-charging ASGI retrieval validates the original
 request, purchase identity and deterministic content before recording one durable
 acceptance in the buyer audit. Repeated calls, concurrent callers and restarts
 cannot duplicate acceptance or execute another payment. Delivery failure preserves
-settled accounting; finality incidents fence new acceptance. This uncommitted
-milestone awaits independent review. See [delivery acceptance and limits](docs/phase3b4.md).
+settled accounting; finality incidents fence new acceptance. This milestone is
+published at `2fce3e6`. See [delivery acceptance and limits](docs/phase3b4.md).
+
+**Phase 3B.5 connects the bounded buyer to offline x402 fixtures**, through an
+explicit host Python adapter and the deterministic scripted model. The same four
+tools use durable task/profile/request-bound quotes and the original single-attempt
+gate. The simulator remains the CLI default. Fixture reconciliation and delivery
+acceptance stay separate operator actions; agent status and retries perform neither.
+This new slice is uncommitted for review. See the
+[offline buyer contract, recovery and validation](docs/phase3b5.md).
 
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative

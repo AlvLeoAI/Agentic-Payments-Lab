@@ -22,6 +22,14 @@ event. Incidents fence new acceptance; accepted history cannot be downgraded.
 Current buyer version 4 rejects older binaries on reopen. Keep signatures and
 merchant response bodies transient, and preserve settled accounting on every
 delivery failure. No automatic retrieval, reconciliation, cache repair or repayment.
+Phase 3B.5 connects the bounded buyer to these fixtures through explicit trusted
+host Python configuration and the scripted SDK model only. The simulator and CLI
+remain unchanged defaults. Preserve the four tool input schemas, immutable buyer
+goal/profile/request witness, task-bound quote handles and single-attempt gate.
+Model mode is distinct from payment backend; fixture reports never contain a
+simulator receipt or claim blockchain settlement. Agent status, continuation and
+cleanup cannot reconcile, retrieve/accept delivery, repair or retry payment.
+Live model activation on the offline x402 buyer is blocked.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the locked environment with `uv sync --locked`.

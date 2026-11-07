@@ -2,6 +2,7 @@
 
 import sqlite3
 from pathlib import Path
+from typing import Protocol
 
 from ..domain import (
     AgentMetadataError,
@@ -12,7 +13,6 @@ from ..domain import (
     canonical,
     digest,
 )
-from ..ledger import Ledger
 from ..storage import Database
 from .contracts import AgentReport, Goal, ToolEvent
 
@@ -32,27 +32,39 @@ CREATE TABLE IF NOT EXISTS recovered_bindings (task_id TEXT PRIMARY KEY);
 METADATA_TIMEOUT = 0.1
 
 
+class BindingAuthority(Protocol):
+    """Trusted independent witness; no payment execution or recovery capability."""
+
+    def task(self, task_id: str) -> TaskContext: ...
+
+    def agent_binding(self, task_id: str) -> str | None: ...
+
+    def initialize_agent(self, task_id: str, binding: str) -> None: ...
+
+
 class AgentStore:
     def __init__(self, path: Path):
         self.db = Database(path, SCHEMA, timeout=METADATA_TIMEOUT)
 
-    def initialize(self, ledger: Ledger, task_id: str, goal: Goal) -> None:
+    def initialize(
+        self, ledger: BindingAuthority, task_id: str, goal: Goal, *, scope: dict | None = None
+    ) -> None:
         """Explicit operator operation; commit the independent witness first."""
         context = ledger.task(task_id)
         original = ledger.agent_binding(task_id)
         if original is not None:
-            self.bind(context, goal, original)
+            self.bind(context, goal, original, scope=scope)
             return
         with self.db.connect() as db:
             if db.execute("SELECT 1 FROM bindings WHERE task_id=?", (task_id,)).fetchone():
                 # Pre-correction metadata has no independent witness. Never guess intent.
                 raise AgentMetadataError("agent_recovery_required")
-        data = canonical({"context": context.model_dump(), "goal": goal.model_dump()})
+        data = self.binding_data(context, goal, scope)
         ledger.initialize_agent(task_id, data)
         with self.db.transaction() as db:
             db.execute("INSERT INTO bindings VALUES(?,?)", (task_id, data))
 
-    def recover(self, ledger: Ledger, task_id: str) -> None:
+    def recover(self, ledger: BindingAuthority, task_id: str) -> None:
         """Restore only the original binding, never quotes, runs, usage or money."""
         data = ledger.agent_binding(task_id)
         if data is None:
@@ -66,9 +78,18 @@ class AgentStore:
             db.execute("INSERT INTO bindings VALUES(?,?)", (task_id, data))
             db.execute("INSERT OR IGNORE INTO recovered_bindings VALUES(?)", (task_id,))
 
-    def bind(self, context: TaskContext, goal: Goal, original: str | None) -> bool:
+    @staticmethod
+    def binding_data(context: TaskContext, goal: Goal, scope: dict | None = None) -> str:
+        data = {"context": context.model_dump(), "goal": goal.model_dump()}
+        if scope is not None:
+            data["scope"] = scope
+        return canonical(data)
+
+    def bind(
+        self, context: TaskContext, goal: Goal, original: str | None, *, scope: dict | None = None
+    ) -> bool:
         """Validate two existing copies; execution never initializes or repairs history."""
-        data = canonical({"context": context.model_dump(), "goal": goal.model_dump()})
+        data = self.binding_data(context, goal, scope)
         if original is None:
             raise AgentMetadataError("agent_initialization_required")
         if original != data:

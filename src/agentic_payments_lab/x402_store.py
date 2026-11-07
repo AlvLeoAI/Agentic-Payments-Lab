@@ -563,9 +563,9 @@ class OfflineGateStore:
             "read_limit": observation.limits.max_reads,
         }
 
-    def report(self, task_id: str) -> dict:
+    def report(self, task_id: str, *, timeout: float | None = None) -> dict:
         """Allowlist export, one read snapshot for state, balance and ordered events."""
-        with self.db.connect() as db, db:
+        with self.db.connect(timeout=timeout) as db, db:
             db.execute("BEGIN")
             task = self._task(db, task_id)
             row = db.execute(

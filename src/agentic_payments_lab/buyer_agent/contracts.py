@@ -58,6 +58,34 @@ class PurchaseSummary(Model):
     operator_reconciliation_required: bool
 
 
+class OfflinePurchaseSummary(Model):
+    """Fixture states are not simulator receipts or verified blockchain settlement."""
+
+    payment_backend: Literal["offline_x402"] = "offline_x402"
+    evidence_source: Literal["offline_fixture"] = "offline_fixture"
+    blockchain_settlement_verified: Literal[False] = False
+    purchase_id: Identifier
+    payment_state: Literal[
+        "not_started",
+        "canceled_before_claim",
+        "signing_claimed",
+        "dispatch_authorized",
+        "canceled_before_dispatch",
+        "reconciliation_required",
+        "fixture_settled",
+        "fixture_unused",
+    ]
+    delivery_state: DeliveryState
+    amount_atomic: Atomic
+    authorization_id: Identifier | None
+    dispatch_may_have_occurred: bool
+    operator_reconciliation_required: bool
+    operator_incident: bool
+    delivery_acceptance_hash: str | None
+    reserved_atomic: Atomic
+    spent_atomic: Atomic
+
+
 class ServiceSummary(Model):
     service_id: Identifier
     quality: Quality
@@ -120,7 +148,7 @@ class AgentReport(Model):
         "purchase_recorded",
         "operator_reconciliation_required",
     ]
-    purchase: PurchaseSummary
+    purchase: PurchaseSummary | OfflinePurchaseSummary
     model_explanation: str | None
     model_usage: ModelUsage
     metadata_persisted: bool = True

@@ -1,7 +1,8 @@
 # Phase 3B.3 — offline evidence validation and explicit reconciliation
 
-Implementation on published Phase 3B.2 commit
-`3fc0cc1f67d9e8d014601ca312ccb35dabdee281`, for review before acceptance/publication.
+Implemented on published Phase 3B.2 commit
+`3fc0cc1f67d9e8d014601ca312ccb35dabdee281` and published as
+`00abf23ef55551e35bf2548bb731a670cd868904` after closure review.
 This slice implements the bounded offline portion of step 6 of the
 [Phase 3 plan](phase3-plan.md). It does not complete Phase 3B or authorize Phase 3C.
 No credentials, real signing, wallet, OpenAI, RPC, facilitator, deployment or
@@ -203,7 +204,7 @@ env -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_PROJECT_ID \
 It must verify namespace isolation including subprocess inheritance, run every
 test plus lint/format/lock checks and preserve repeated simulator/agent demos.
 Failure to establish isolation is a validation failure, with no unrestricted fallback.
-Local validation is not hosted CI; this implementation is left uncommitted for review.
+Local validation is separate from hosted CI.
 
 Observed local validation after the focused review corrections: the complete
 isolated validator exited 0 with **508 tests passed in 133.42 seconds** (493 before
@@ -216,7 +217,9 @@ inheritance were verified. Focused evidence/recovery/correction checks passed
 (139 tests), as did all 37 unchanged external review probes. The new regression
 file failed 11 cases against an isolated pre-fix source copy, with four controls
 passing; all 15 pass with the corrections. No working-tree files were reverted
-for that comparison. No hosted Phase 3B.3 workflow was run.
+for that comparison. The subsequent publication evidence records **508 passing
+tests** and verified namespace/subprocess isolation in the
+[exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42379074948).
 
 Live use remains blocked by the documented unresolved local
 [SQLite WAL-reset prerequisite](phase3b1.md#sqlite-prerequisite--live-use-blocked).

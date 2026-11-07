@@ -30,6 +30,7 @@ from openai.types.shared import Reasoning
 from ..coordinator import BuyerSession
 from .boundary import ARGUMENTS, Boundary
 from .contracts import AgentReport, Explanation, Goal, ModelUsage, Settings, ToolError, ToolEvent
+from .offline_x402 import OfflineBoundary, OfflineX402Buyer
 from .scripted import ScriptedBuyer
 from .store import METADATA_TIMEOUT, AgentStore
 
@@ -131,6 +132,8 @@ class BoundedModel(Model):
         raise StopRun(code) from None
 
     async def get_response(self, **kwargs) -> ModelResponse:
+        if isinstance(self.boundary, OfflineBoundary):
+            self.boundary.cancellation_fence()
         if self.stop_reason:
             self.stop(self.stop_reason)
         if (
@@ -167,6 +170,8 @@ class BoundedModel(Model):
         # No await between observation and persistence. A crash may still leave
         # the earlier pending marker, conservatively declaring unknown consumption.
         self.checkpoint()
+        if isinstance(self.boundary, OfflineBoundary):
+            self.boundary.cancellation_fence()
         if (
             len(json.dumps([item.model_dump(mode="json") for item in response.output]).encode())
             > 8192
@@ -241,7 +246,7 @@ def live_client(settings: Settings) -> AsyncOpenAI:
 
 
 async def run_buyer(
-    session: BuyerSession,
+    session: BuyerSession | OfflineX402Buyer,
     store: AgentStore,
     goal: Goal,
     settings: Settings,
@@ -249,12 +254,17 @@ async def run_buyer(
     model: Model | None = None,
 ) -> AgentReport:
     """Injected models are for trusted offline tests, never CLI/model-controlled input."""
+    offline_x402 = type(session) is OfflineX402Buyer
+    if offline_x402 and settings.mode != "offline":
+        raise ValueError("The offline x402 buyer requires a scripted model; live mode is blocked")
     if settings.mode == "live" and (not settings.model or model is not None):
         raise ValueError("Live mode requires an explicit OpenAI model")
     if settings.mode == "offline" and settings.model is not None:
         raise ValueError("Offline mode uses the scripted model")
     disable_export()
-    boundary = Boundary(session, store, goal)
+    boundary = (
+        OfflineBoundary(session, store, goal) if offline_x402 else Boundary(session, store, goal)
+    )
     constraints = boundary.catalog()  # Validates the existing operator grant before any model call.
     run_id = str(uuid4())
     client = live_client(settings) if settings.mode == "live" else None
@@ -266,7 +276,13 @@ async def run_buyer(
     bounded = BoundedModel(selected, boundary, settings, run_id)
     agent = Agent(
         name="Bounded simulated buyer",
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS
+        + (
+            "\nPayment backend: offline_x402. Fixture outcomes are synthetic, never verified "
+            "blockchain settlement. Only the operator can reconcile or accept delivery."
+            if offline_x402
+            else ""
+        ),
         model=bounded,
         tools=bounded.tools(),
         output_type=Explanation,
@@ -300,9 +316,11 @@ async def run_buyer(
                     tool_execution=ToolExecutionConfig(max_function_tool_concurrency=1),
                 ),
             )
+            if offline_x402:
+                boundary.cancellation_fence()
             explanation = Explanation.model_validate(result.final_output).explanation
     except asyncio.CancelledError as exc:
-        cancelled = exc
+        cancelled = asyncio.CancelledError("offline_buyer_canceled") if offline_x402 else exc
         termination = "cancelled"
     except StopRun as exc:
         termination = exc.code

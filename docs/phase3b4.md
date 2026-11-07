@@ -175,8 +175,12 @@ and transfer counts, not evidence of real blockchain charges.
 Run the existing complete validator inside verified OS network isolation after
 installing the locked dependencies, as documented in `AGENTS.md`. It retains
 subprocess isolation verification, lint/format/lock checks, all prior tests and
-repeated simulator plus offline agent demos. This milestone remains uncommitted
-for independent review; no hosted Phase 3B.4 run is claimed.
+repeated simulator plus offline agent demos. The reviewed milestone was published
+as [2fce3e6](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/2fce3e6c9d5c9786a390d15d237a4b41bea8c264).
+The retained publication evidence records **592 passing tests** and verified
+namespace/subprocess isolation in the
+[exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42402420022).
+That published result does not validate later uncommitted milestones.
 
 The [SQLite WAL-reset prerequisite](phase3b1.md#sqlite-prerequisite--live-use-blocked)
 remains unresolved for the local runtime. Passing tests and a different hosted

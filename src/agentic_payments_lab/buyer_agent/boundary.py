@@ -99,20 +99,27 @@ class Boundary:
         if name == "get_purchase_status":
             return self.status()
         if name == "get_quote":
-            if self.session.status_or_none():
+            if self.has_purchase():
                 return ToolError(error="purchase_exists")
             if args.service_id != self.catalog().recommended_service_id:
                 return ToolError(error="service_not_eligible")
-            request = PurchaseRequest(
-                service_id=args.service_id, subject=self.goal.subject, purpose=self.goal.purpose
-            )
-            quote = await self.session.quote(request)
-            handle = self.store.quote(self.session.context, request, quote)
-            return QuoteResult(
-                quote_id=handle, service_id=args.service_id, amount_atomic=quote.amount
-            )
+            return await self.quote(args.service_id)
+        return await self.purchase(args.quote_id)
+
+    def has_purchase(self) -> bool:
+        return self.session.status_or_none() is not None
+
+    async def quote(self, service_id: str) -> QuoteResult:
+        request = PurchaseRequest(
+            service_id=service_id, subject=self.goal.subject, purpose=self.goal.purpose
+        )
+        quote = await self.session.quote(request)
+        handle = self.store.quote(self.session.context, request, quote)
+        return QuoteResult(quote_id=handle, service_id=service_id, amount_atomic=quote.amount)
+
+    async def purchase(self, quote_id: str) -> Model:
         try:
-            request, quote = self.store.resolve(self.session.context.task_id, args.quote_id)
+            request, quote = self.store.resolve(self.session.context.task_id, quote_id)
         except KeyError:
             return ToolError(error="invalid_quote_handle")
         if request.subject != self.goal.subject or request.purpose != self.goal.purpose:

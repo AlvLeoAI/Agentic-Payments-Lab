@@ -8,9 +8,25 @@ from uuid import uuid4
 from pydantic import TypeAdapter, ValidationError
 
 from .buyer_schema import SchemaError, open_buyer_database
-from .domain import Identifier, PurchaseConflict, PurchaseRequest, TaskContext, canonical, digest
+from .domain import (
+    Identifier,
+    PurchaseConflict,
+    PurchaseRequest,
+    TaskContext,
+    Timestamp,
+    canonical,
+    digest,
+)
 from .ledger import SCHEMA, Ledger
 from .x402_contracts import FixtureEvidence, GateDenied, OperatorPolicy, SigningTerms
+from .x402_delivery_contracts import (
+    DeliveryAcceptance,
+    DeliveryBinding,
+    DeliveryFailure,
+    MerchantDeliveryReport,
+    acceptance_for,
+    validate_delivery_identity,
+)
 from .x402_evidence import Observation, assess, contradicts
 
 TERMINAL = ("fixture_settled", "fixture_unused")
@@ -127,6 +143,121 @@ class OfflineGateStore:
             if not row:
                 raise GateDenied("authorization_missing")
             return SigningTerms.model_validate_json(row["terms"])
+
+    def _delivery_binding(self, db, task_id: str) -> DeliveryBinding:
+        TypeAdapter(Identifier).validate_python(task_id, strict=True)
+        task = self._task(db, task_id)
+        row = db.execute(
+            "SELECT * FROM x402_attempts WHERE purchase_id=?", (task["purchase_id"],)
+        ).fetchone()
+        if not row or row["phase"] != "fixture_settled" or not row["evidence"]:
+            raise GateDenied("delivery_requires_fixture_settlement")
+        request = PurchaseRequest.model_validate_json(task["request"])
+        terms = SigningTerms.model_validate_json(row["terms"])
+        evidence = FixtureEvidence.model_validate_json(row["evidence"])
+        if (
+            terms.purchase_id != task["purchase_id"]
+            or row["grant_id"] != task["grant_id"]
+            or terms.authorization_id != row["authorization_id"]
+            or terms.nonce != row["nonce"]
+            or terms.amount != row["amount"]
+            or terms.policy_hash != digest(self.policy)
+            or terms.request_hash != digest(request)
+            or evidence.kind != "transfer"
+            or evidence.terms_hash != digest(terms)
+        ):
+            raise GateDenied("delivery_binding_history_inconsistent")
+        return DeliveryBinding(
+            context=TaskContext(
+                task_id=task_id, grant_id=task["grant_id"], purchase_id=task["purchase_id"]
+            ),
+            request=request,
+            terms=terms,
+        )
+
+    @staticmethod
+    def _accepted_delivery(db, binding: DeliveryBinding):
+        rows = db.execute(
+            "SELECT data FROM events WHERE purchase_id=? "
+            "AND event_type='offline_delivery_accepted' ORDER BY sequence LIMIT 2",
+            (binding.context.purchase_id,),
+        ).fetchall()
+        if len(rows) > 1:
+            raise GateDenied("delivery_history_inconsistent")
+        if rows:
+            accepted = DeliveryAcceptance.model_validate_json(rows[0]["data"])
+            if accepted.binding_hash != digest(binding):
+                raise GateDenied("delivery_history_inconsistent")
+            return accepted
+        return None
+
+    def delivery_request(self, task_id: str) -> DeliveryBinding | None:
+        """Snapshot the original settled purchase; an accepted replay needs no GET."""
+        with self.db.connect() as db:
+            db.execute("BEGIN")
+            binding = self._delivery_binding(db, task_id)
+            if self._accepted_delivery(db, binding) is not None:
+                return None
+            self._no_incident(db)
+            return binding
+
+    def record_delivery(
+        self,
+        task_id: str,
+        binding: DeliveryBinding,
+        report: MerchantDeliveryReport | None,
+        failure: str,
+        now: int,
+    ) -> dict:
+        """Acceptance IS its append-only audit record, serialized in one buyer write.
+
+        No merchant write, financial transition, raw body or delivered prose is
+        retained. A failure cannot downgrade an accepted result. Per-invocation
+        retrieval counts belong to the caller, not this deduplicated history.
+        """
+        if type(binding) is not DeliveryBinding:
+            raise GateDenied("offline_delivery_binding_required")
+        binding = DeliveryBinding.model_validate_json(binding.model_dump_json(warnings=False))
+        TypeAdapter(Timestamp).validate_python(now, strict=True)
+        with self.db.transaction() as db:
+            original = self._delivery_binding(db, task_id)
+            if binding != original:
+                raise GateDenied("delivery_binding_changed")
+            if self._accepted_delivery(db, original) is not None:
+                return {"outcome": "already_accepted", "reason": None}
+            self._no_incident(db)
+            accepted = None
+            if report is not None:
+                try:
+                    if type(report) is not MerchantDeliveryReport:
+                        raise ValueError("Offline delivery report required")
+                    report = MerchantDeliveryReport.model_validate_json(
+                        report.model_dump_json(warnings=False)
+                    )
+                    validate_delivery_identity(original, report)
+                    if report.delivery_state == "cached":
+                        accepted = acceptance_for(original, report)
+                    else:
+                        failure = report.delivery_state
+                except (ValueError, TypeError, RecursionError):
+                    failure = "unavailable_or_invalid"
+            if accepted is not None:
+                Ledger._event(
+                    db, original.context.purchase_id, "offline_delivery_accepted", accepted, now
+                )
+                current = {"outcome": "accepted", "reason": None}
+            else:
+                failed = DeliveryFailure(binding_hash=digest(original), reason=failure)
+                if not db.execute(
+                    "SELECT 1 FROM events WHERE purchase_id=? "
+                    "AND event_type='offline_delivery_failed' AND data=? LIMIT 1",
+                    (original.context.purchase_id, canonical(failed)),
+                ).fetchone():
+                    Ledger._event(
+                        db, original.context.purchase_id, "offline_delivery_failed", failed, now
+                    )
+                current = {"outcome": "failed", "reason": failed.reason}
+        return current  # Only acknowledge the decision after commit.
 
     def claim(
         self, task_id: str, requirements_hash: str, now: int
@@ -461,6 +592,16 @@ class OfflineGateStore:
                 if e["event_type"] == "offline_reconciliation_observed"
             ]
             last = observations[-1] if observations else None
+            deliveries = [e for e in events if e["event_type"] == "offline_delivery_accepted"]
+            failures = [e for e in events if e["event_type"] == "offline_delivery_failed"]
+            if len(deliveries) > 1:
+                raise GateDenied("delivery_history_inconsistent")
+            accepted = (
+                DeliveryAcceptance.model_validate_json(deliveries[0]["data"])
+                if deliveries
+                else None
+            )
+            failed = DeliveryFailure.model_validate_json(failures[-1]["data"]) if failures else None
         return {
             "mode": "offline_x402",
             "blockchain_settlement_verified": False,
@@ -475,7 +616,26 @@ class OfflineGateStore:
             "reason": row["reason"] if row else ("canceled_before_claim" if canceled else None),
             "dispatch_may_have_occurred": bool(row and row["dispatch_authorized"]),
             "reconciliation_required": bool(row and row["phase"] not in TERMINAL),
-            "delivery_state": "not_requested",
+            "delivery_state": "delivered"
+            if accepted
+            else ("failed" if failed else "not_requested"),
+            "delivery": {
+                "source": "offline_fixture",
+                "acceptance": {
+                    **accepted.model_dump(),
+                    "recorded_at": deliveries[0]["recorded_at"],
+                }
+                if accepted
+                else None,
+                # Latest distinct persisted failure, not the latest invocation.
+                # Replaying an older failure does not append another audit event.
+                "last_failure": {
+                    **failed.model_dump(),
+                    "recorded_at": failures[-1]["recorded_at"],
+                }
+                if failed
+                else None,
+            },
             "reconciliation": {
                 "source": "offline_fixture",
                 "operator_incident": incident,

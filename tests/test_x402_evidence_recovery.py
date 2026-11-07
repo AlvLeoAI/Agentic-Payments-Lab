@@ -329,13 +329,13 @@ def test_version3_reopen_preserves_all_existing_tables_and_history(shop):
     path = shop.buyer.db.path
     with sqlite3.connect(path) as db:
         before = list(db.iterdump())
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
     reopened = OfflineGateStore(path, shop.buyer.policy)
     with sqlite3.connect(path) as db:
         assert list(db.iterdump()) == before
     reconcile(reopened)
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     with shop.merchant.store.db.connect() as db:
         assert db.execute("PRAGMA user_version").fetchone()[0] == 1
@@ -419,7 +419,7 @@ def test_version2_upgrade_preserves_exact_historical_rows_and_bindings(tmp_path)
     store = OfflineGateStore(path, policy_for_test())
     with sqlite3.connect(path) as db:
         assert list(db.iterdump()) == before  # All tables, identities and JSON are unchanged.
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     assert store.report("task")["phase"] == "fixture_settled"
     assert store.report("task")["budget"] == {"budget": 30_000, "reserved": 10_000, "spent": 10_000}
@@ -443,7 +443,7 @@ def test_version2_upgrade_failure_rolls_back_marker_and_history(tmp_path, monkey
                     failure == "version"
                     and action == sqlite3.SQLITE_PRAGMA
                     and a == "user_version"
-                    and b == "3"
+                    and b == "4"
                 ) or (
                     failure == "commit" and action == sqlite3.SQLITE_TRANSACTION and a == "COMMIT"
                 ):
@@ -464,7 +464,7 @@ def test_version2_upgrade_failure_rolls_back_marker_and_history(tmp_path, monkey
 
 
 @pytest.mark.parametrize(
-    "boundary,version", [("migrate_before_commit", 2), ("migrate_after_commit", 3)]
+    "boundary,version", [("migrate_before_commit", 2), ("migrate_after_commit", 4)]
 )
 def test_interrupted_version2_upgrade_then_explicit_reopen(tmp_path, boundary, version):
     from test_x402_gate import policy_for_test
@@ -480,7 +480,7 @@ def test_interrupted_version2_upgrade_then_explicit_reopen(tmp_path, boundary, v
         assert list(db.iterdump()) == before
     OfflineGateStore(path, policy_for_test())
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert list(db.iterdump()) == before
 
 
@@ -498,5 +498,5 @@ def test_concurrent_version2_openers_apply_one_upgrade_without_history_changes(t
     results = [(child, child.communicate(timeout=20)) for child in children]
     assert all(child.returncode == 0 for child, _ in results), results
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert list(db.iterdump()) == before

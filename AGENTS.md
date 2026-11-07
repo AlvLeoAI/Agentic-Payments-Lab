@@ -15,6 +15,13 @@ inconclusive observations retain exposure, and finality incidents block new
 signing claims/dispatch without rolling back accepted accounting. Buyer version 3
 rejects older binaries on reopen; stop old processes before upgrade. No automatic polling,
 startup reconciliation, merchant repair or agent/CLI backend switch is authorized.
+Phase 3B.4 adds explicit offline buyer delivery acceptance through one non-charging
+ASGI retrieval per invocation. Require prior buyer fixture settlement and exact
+purchase/request/content binding; acceptance and audit are one append-only buyer
+event. Incidents fence new acceptance; accepted history cannot be downgraded.
+Current buyer version 4 rejects older binaries on reopen. Keep signatures and
+merchant response bodies transient, and preserve settled accounting on every
+delivery failure. No automatic retrieval, reconciliation, cache repair or repayment.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the locked environment with `uv sync --locked`.

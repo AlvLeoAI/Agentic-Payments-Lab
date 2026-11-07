@@ -1,6 +1,7 @@
 """Additive buyer-file upgrades. No cross-file migration or automatic recovery."""
 
 import sqlite3
+import time
 from contextlib import closing
 from functools import lru_cache
 from pathlib import Path
@@ -9,9 +10,9 @@ from uuid import uuid4
 from .domain import canonical
 from .storage import Database
 
-# 0: Phase 2; 1: gate; 2: cancellation; 3: reconciliation incident enforcement.
-# Version 3 has the same tables as 2, but older binaries must not ignore incidents.
-VERSION = 3
+# 0: Phase 2; 1: gate; 2: cancellation; 3: incidents; 4: delivery acceptance.
+# Versions 2-4 share tables; older binaries must not ignore new audit/state semantics.
+VERSION = 4
 SIMULATION_PROFILE = {"mode": "simulated", "network": "simulation:local", "asset": "SIM-USDC"}
 ADDITIONS = """
 CREATE TABLE buyer_profile (
@@ -115,7 +116,7 @@ def _validate(db, base_schema: str, profile: dict, initialize: bool) -> int:
             raise SchemaError("Only the exact Phase 2 simulator schema can be upgraded")
     else:
         schema = base_schema + ADDITIONS + (CANCELLATIONS if version >= 2 else "")
-        if version not in (1, 2, VERSION) or objects != _expected(schema):
+        if version not in (1, 2, 3, VERSION) or objects != _expected(schema):
             raise SchemaError("Unknown or incomplete buyer schema; operator recovery required")
         rows = db.execute("SELECT data FROM buyer_profile").fetchall()
         if len(rows) != 1 or rows[0]["data"] != canonical(profile):
@@ -155,7 +156,19 @@ def open_buyer_database(
     # SQLite cannot switch to WAL inside the migration transaction. A failure
     # here leaves a valid committed schema, never an implicitly repaired one;
     # explicit reopening can finish journal configuration without replaying work.
-    with database.connect() as db:
-        if db.execute("PRAGMA journal_mode=WAL").fetchone()[0] != "wal":
-            raise SchemaError("Buyer WAL configuration failed; inspect existing state")
-    return database
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with database.connect(timeout=max(0.0, deadline - time.monotonic())) as db:
+                if db.execute("PRAGMA journal_mode=WAL").fetchone()[0] != "wal":
+                    raise SchemaError("Buyer WAL configuration failed; inspect existing state")
+            return database
+        except sqlite3.OperationalError as error:
+            # A competing opener can take a lock after our marker commit. SQLite
+            # may return BUSY immediately for a journal switch despite busy_timeout.
+            # Retry only this post-commit setting, with a fresh connection; never
+            # replay migration, accounting or execution. Other failures propagate.
+            remaining = deadline - time.monotonic()
+            if getattr(error, "sqlite_errorcode", None) != sqlite3.SQLITE_BUSY or remaining <= 0:
+                raise
+            time.sleep(min(0.005, remaining))

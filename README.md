@@ -35,6 +35,14 @@ after accepted finality records an operator incident without reversing accountin
 This is a fixture-only Python operator API, with no RPC client, real proof, startup
 worker or agent/CLI integration. See [evidence, recovery and limits](docs/phase3b3.md).
 
+**Phase 3B.4 adds explicit offline buyer delivery acceptance** for an already
+fixture-settled purchase. A non-charging ASGI retrieval validates the original
+request, purchase identity and deterministic content before recording one durable
+acceptance in the buyer audit. Repeated calls, concurrent callers and restarts
+cannot duplicate acceptance or execute another payment. Delivery failure preserves
+settled accounting; finality incidents fence new acceptance. This uncommitted
+milestone awaits independent review. See [delivery acceptance and limits](docs/phase3b4.md).
+
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
 agent orchestration framework is used.

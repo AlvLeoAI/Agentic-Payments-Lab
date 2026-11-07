@@ -21,6 +21,7 @@ from .domain import Identifier, PurchaseRequest, canonical, digest
 from .x402_adapter.merchant_protocol import challenge, response_header, validate_submission
 from .x402_adapter.protocol import _unique_object, required_data
 from .x402_contracts import GateDenied
+from .x402_delivery_contracts import parse_delivery_report
 from .x402_merchant_contracts import (
     MerchantAuthorization,
     MerchantRequest,
@@ -242,4 +243,17 @@ class OfflineMerchantClient:
         response = await self._request(purchase_id=purchase_id)
         if response.status_code not in (200, 202, 410):
             raise GateDenied("offline_merchant_status_unavailable")
-        return response.json()
+        try:
+            # HTTPX/ASGI has already buffered content. This bounds parsing and
+            # acceptance, not transport allocation or in-process merchant work.
+            report = parse_delivery_report(response.content)
+            if response.headers.get("content-type", "").partition(";")[
+                0
+            ].strip().lower() != "application/json" or response.status_code != {
+                "cached": 200,
+                "gone": 410,
+            }.get(report.delivery_state, 202):
+                raise ValueError("Invalid delivery HTTP envelope")
+            return report.model_dump(mode="json")
+        except (ValueError, TypeError, RecursionError):
+            raise GateDenied("invalid_offline_merchant_delivery") from None

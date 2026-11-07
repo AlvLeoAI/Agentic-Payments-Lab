@@ -3,13 +3,13 @@ import json
 import sqlite3
 import subprocess
 import sys
-import time
 import traceback
 from pathlib import Path
 
 import pytest
 from agents.usage import Usage
 from evidence_support import reconciler
+from offline_buyer_processes import competing_buyers
 from offline_buyer_support import counters, drive, finance, quote, setup
 from test_buyer_agent import SequenceModel
 
@@ -304,37 +304,18 @@ def test_process_death_keeps_identity_and_never_reexecutes_claim(tmp_path, bound
 
 def test_four_processes_enter_gate_together_with_one_execution(tmp_path):
     shop, buyer, metadata, goal = setup(tmp_path)
-    worker = Path(__file__).with_name("offline_buyer_worker.py")
-    children = []
-    outputs = []
-    try:
-        # Serialize only host/metadata preparation. All four real processes then
-        # wait at the SAME pre-claim barrier with no transaction held, so the
-        # assertion measures competing gate entries rather than initializer timing.
-        for expected in range(1, 5):
-            child = subprocess.Popen(
-                [sys.executable, str(worker), str(tmp_path), "concurrent"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            children.append(child)
-            deadline = time.monotonic() + 10
-            while len(list(tmp_path.glob("ready-*"))) < expected:
-                if time.monotonic() > deadline or child.poll() is not None:
-                    break
-                time.sleep(0.02)
-        entered = len(list(tmp_path.glob("ready-*")))
-    finally:
-        (tmp_path / "release-workers").touch()
-        for child in children:
-            outputs.append(child.communicate(timeout=20))
-    assert entered == 4, outputs
-    assert [p.returncode for p in children] == [0] * 4, outputs
-    assert {json.loads(stdout)["purchase_id"] for stdout, _ in outputs} == {
-        buyer.context.purchase_id
-    }
-    assert counters(shop) == (1, 1, 1, 1, 10_000)
-    assert finance(shop) == (10_000, 0)
-    assert drive(buyer, metadata, goal).purchase.purchase_id == buyer.context.purchase_id
-    assert counters(shop) == (1, 1, 1, 1, 10_000)
+
+    def before_release():
+        assert counters(shop) == (0, 0, 0, 0, 0)
+        assert finance(shop) == (0, 0)
+
+    with competing_buyers(tmp_path, before_release) as (children, outputs):
+        assert len(list(tmp_path.glob("ready-*"))) == 4
+        assert [p.returncode for p in children] == [0] * 4
+        assert {json.loads(stdout)["purchase_id"] for stdout, _ in outputs} == {
+            buyer.context.purchase_id
+        }
+        assert counters(shop) == (1, 1, 1, 1, 10_000)
+        assert finance(shop) == (10_000, 0)
+        assert drive(buyer, metadata, goal).purchase.purchase_id == buyer.context.purchase_id
+        assert counters(shop) == (1, 1, 1, 1, 10_000)

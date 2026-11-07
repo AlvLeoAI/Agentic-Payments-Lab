@@ -1,10 +1,12 @@
 # Phase 3B.5 — scripted buyer over offline x402 fixtures
 
-This uncommitted milestone builds on accepted Phase 3B.4 commit
+This milestone builds on accepted Phase 3B.4 commit
 `2fce3e6c9d5c9786a390d15d237a4b41bea8c264`. It connects the existing bounded
 Agents SDK runner to the existing offline gate and ASGI merchant. It does not
 introduce a live model call, wallet, real signature, RPC, facilitator, external
 merchant transport or deployment. All protocol evidence remains synthetic.
+It was published as `3c1845c078c97cf905b334cf08116722e33edf24`; hosted acceptance
+remains on hold pending review and publication of the local concurrency-test correction.
 
 ## Explicit host selection and operator sequence
 
@@ -160,8 +162,38 @@ Run `scripts/validate_offline.py` using the fail-closed namespace launcher in
 `AGENTS.md`, after locked dependency installation. It includes subprocess isolation,
 lint/format/lock checks, the complete test suite and the unchanged repeated
 simulator plus free/paid/unaffordable offline agent demos. Validation evidence and
-source hashes are retained outside the repository for independent review. Hosted
-CI for this uncommitted milestone has not run.
+source hashes are retained outside the repository for independent review.
+
+The [published commit's hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42408744256)
+passed isolation/lint/format/lock checks but finished with 652 tests passing and
+one four-process concurrency test failing. One worker exited unsuccessfully;
+its traceback was truncated and repeated demos were not reached. The exact hosted
+exception remains unknown. A controlled local reproduction established a harness
+defect: the first worker's ten-second gate wait could expire while the parent was
+still preparing later workers, leaving a stale readiness marker and `tool_error`.
+That reproduction did not establish duplicate execution or an accounting defect.
+
+The corrected test prepares all processes before starting agent runs, then requires
+four live, PID-bound waiters at the same pre-claim barrier before releasing them.
+Startup is bounded separately; the parent bounds the gate rendezvous and reaps
+failed workers without releasing an incomplete cohort. The gate wait yields to
+the unchanged application's cooperative timeout. Gate calls still contend, and
+all original successful-exit, identity, authority-count and accounting assertions
+remain. After all gate calls return, only the SDK bookkeeping continuations are
+coordinated. A separate local trace established `SQLITE_BUSY` at the metadata
+store's existing 100 ms write-lock bound; this correctly terminates a run with
+`metadata_error`. A real-lock regression verifies that outcome preserves the
+original purchase and reserved exposure, stops model continuation and does not
+reexecute payment. The gate test does not establish that every concurrent agent
+run completes successfully under arbitrary metadata contention. No production
+timeout or retry policy was changed.
+An eleven-second startup-skew regression catches the original defect;
+a killed-waiter regression rejects stale readiness without execution.
+Worker stdout/stderr, reports and arrival/release/exit timing are written directly
+to disposable files. Failures preserve these files and database snapshots outside
+the validator's temporary tree and print full diagnostics in pytest output, avoiding
+an abbreviated list representation. Local passing checks do not establish hosted
+acceptance; the correction remains uncommitted for independent review.
 
 Live integration remains blocked by the unresolved local SQLite WAL-reset fix
 prerequisite and the separately scoped signer interoperability, external merchant,

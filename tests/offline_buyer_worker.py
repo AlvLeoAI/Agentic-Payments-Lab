@@ -1,5 +1,6 @@
 """Abrupt process boundaries over pre-enrolled, disposable bridge fixtures."""
 
+import asyncio
 import json
 import os
 import sys
@@ -69,20 +70,33 @@ elif boundary == "after_finish":
 
     metadata.finish = finish
 elif boundary == "concurrent":
+
+    def mark(stage):
+        (path / f"{stage}-{os.getpid()}").write_text(str(time.monotonic()))
+
+    mark("prepared")
+    assert sys.stdin.readline() == "run\n", "Parent closed before starting worker"
     original_run = buyer.gate.run
 
     async def synchronized(*args, **kwargs):
-        (path / f"ready-{os.getpid()}").touch()
-        deadline = time.monotonic() + 10
+        mark("ready")
         while not (path / "release-workers").exists():
-            if time.monotonic() >= deadline:
-                raise AssertionError("Process barrier timed out")
-            time.sleep(0.01)
-        return await original_run(*args, **kwargs)
+            # Parent bounds this rendezvous and reaps failed workers. Yield so
+            # the unchanged application's cooperative timeout remains effective.
+            await asyncio.sleep(0.01)
+        mark("entered")
+        result = await original_run(*args, **kwargs)
+        mark("returned")
+        # The gate calls contend; only subsequent SDK metadata writes are
+        # coordinated. Their short, fail-closed lock timeout is tested separately.
+        while not (path / f"finish-{os.getpid()}").exists():
+            await asyncio.sleep(0.01)
+        return result
 
     buyer.gate.run = synchronized
 report = drive(buyer, metadata, goal)
 if boundary == "concurrent":
+    (path / f"worker-{os.getpid()}.report.json").write_text(report.model_dump_json())
     assert report.termination == "completed", report.model_dump_json()
     print(
         json.dumps(

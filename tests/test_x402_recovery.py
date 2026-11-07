@@ -65,7 +65,7 @@ def test_versioned_additive_upgrade_preserves_phase2_finance_and_bindings(tmp_pa
     }
     assert "original-fixture-intent" in ledger.agent_binding("fixture-agent")
     with ledger.db.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert (
             json.loads(db.execute("SELECT data FROM buyer_profile").fetchone()[0])["mode"]
             == "simulated"
@@ -95,7 +95,7 @@ def test_failed_upgrade_rolls_back_all_ddl_and_version(tmp_path, monkeypatch, de
                     deny == "version"
                     and action == sqlite3.SQLITE_PRAGMA
                     and a == "user_version"
-                    and b == "2"
+                    and b == "3"
                 ):
                     return sqlite3.SQLITE_DENY
                 return sqlite3.SQLITE_OK

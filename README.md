@@ -27,6 +27,14 @@ Merchant-reported success does not settle buyer accounting. There is no agent/CL
 backend switch, real signer or facilitator connection. See the
 [offline merchant contract and failure matrix](docs/phase3b2.md).
 
+**Phase 3B.3 adds offline evidence validation and explicit reconciliation** over
+bounded synthetic public records. Matching finalized fixture receipts/events or
+post-expiry non-use can resolve the original buyer reservation exactly once.
+Missing, malformed or provisional evidence stays inconclusive; a contradiction
+after accepted finality records an operator incident without reversing accounting.
+This is a fixture-only Python operator API, with no RPC client, real proof, startup
+worker or agent/CLI integration. See [evidence, recovery and limits](docs/phase3b3.md).
+
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
 agent orchestration framework is used.
@@ -265,6 +273,8 @@ There is no authentication, encryption at rest, general migration framework, bac
 reconciler, automated refund, live wall-clock service, or distributed deployment.
 The buyer file has narrow additive upgrades from the exact Phase 2 and initial
 Phase 3B.1 schemas; version 2 adds durable cancellation before an offline claim.
+Version 3 preserves those tables and rejects older binaries on reopen to protect the
+[offline reconciliation incident fence](docs/phase3b3.md#ownership-persistence-and-reporting).
 Unknown/incomplete schemas are rejected before persistent journal changes.
 Use fresh development state and review the
 [upgrade procedure](docs/phase3b1.md#persistence-and-upgrade) before opening retained state.

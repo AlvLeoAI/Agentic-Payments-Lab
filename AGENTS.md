@@ -8,6 +8,13 @@ with injected signer/dispatcher doubles. Phase 3B.2 adds the explicitly enrolled
 ASGI-only merchant, durable request/nonce bindings and settlement doubles. Do not
 enable live blockchain, wallet, cryptographic signing, RPC, external x402 HTTP
 transport, or facilitator integrations.
+Phase 3B.3 permits bounded synthetic evidence validation and explicit operator
+reconciliation. Its fixture source has no network transport and proves no real
+chain facts. Keep evidence/accounting/audit atomic in the existing buyer file;
+inconclusive observations retain exposure, and finality incidents block new
+signing claims/dispatch without rolling back accepted accounting. Buyer version 3
+rejects older binaries on reopen; stop old processes before upgrade. No automatic polling,
+startup reconciliation, merchant repair or agent/CLI backend switch is authorized.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the locked environment with `uv sync --locked`.

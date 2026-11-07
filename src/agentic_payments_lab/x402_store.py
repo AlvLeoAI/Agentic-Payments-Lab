@@ -11,6 +11,7 @@ from .buyer_schema import SchemaError, open_buyer_database
 from .domain import Identifier, PurchaseConflict, PurchaseRequest, TaskContext, canonical, digest
 from .ledger import SCHEMA, Ledger
 from .x402_contracts import FixtureEvidence, GateDenied, OperatorPolicy, SigningTerms
+from .x402_evidence import Observation, assess, contradicts
 
 TERMINAL = ("fixture_settled", "fixture_unused")
 
@@ -94,6 +95,7 @@ class OfflineGateStore:
         return task
 
     def _grant(self, db, now):
+        self._no_incident(db)
         row = db.execute(
             "SELECT * FROM grants WHERE grant_id=?", (self.policy.grant.grant_id,)
         ).fetchone()
@@ -104,6 +106,27 @@ class OfflineGateStore:
             or not self.policy.grant.issued_at <= now < self.policy.grant.expires_at
         ):
             raise GateDenied("grant_missing_changed_revoked_or_expired")
+
+    @staticmethod
+    def _no_incident(db):
+        # A finality contradiction freezes new signing claims/dispatch in this one
+        # offline profile. No clearing API or automatic accounting reversal.
+        if db.execute(
+            "SELECT 1 FROM events WHERE event_type='offline_reconciliation_incident' LIMIT 1"
+        ).fetchone():
+            raise GateDenied("offline_finality_incident; operator_review_required")
+
+    def reconciliation_terms(self, task_id: str) -> SigningTerms:
+        """Read an existing identity. Never enroll, claim, renew or repair one."""
+        with self.db.connect() as db:
+            db.execute("BEGIN")
+            task = self._task(db, task_id)
+            row = db.execute(
+                "SELECT terms FROM x402_attempts WHERE purchase_id=?", (task["purchase_id"],)
+            ).fetchone()
+            if not row:
+                raise GateDenied("authorization_missing")
+            return SigningTerms.model_validate_json(row["terms"])
 
     def claim(
         self, task_id: str, requirements_hash: str, now: int
@@ -255,6 +278,86 @@ class OfflineGateStore:
         except ValidationError:
             raise GateDenied("invalid_offline_fixture") from None
         with self.db.transaction() as db:
+            self._no_incident(db)
+            task = self._task(db, task_id)
+            row = db.execute(
+                "SELECT * FROM x402_attempts WHERE purchase_id=?", (task["purchase_id"],)
+            ).fetchone()
+            if not row:
+                raise GateDenied("authorization_missing")
+            self._apply_fixture(db, row, evidence, now)
+
+    @staticmethod
+    def _apply_fixture(db, row, evidence, now):
+        terms = SigningTerms.model_validate_json(row["terms"])
+        if (
+            evidence.terms_hash != digest(terms)
+            or evidence.nonce != terms.nonce
+            or evidence.payer != terms.payer
+            or evidence.recipient != terms.recipient
+            or evidence.amount != terms.amount
+            or evidence.finality != "finalized"
+            or evidence.block_timestamp > now
+        ):
+            raise GateDenied("fixture_inconclusive_or_mismatched")
+        if evidence.kind == "transfer":
+            if (
+                not evidence.transaction_success
+                or not evidence.nonce_used
+                or evidence.transaction_hash is None
+                or not terms.valid_after < evidence.block_timestamp < terms.valid_before
+            ):
+                raise GateDenied("fixture_transfer_not_proven")
+            phase, spent = "fixture_settled", terms.amount
+        else:
+            if (
+                evidence.nonce_used
+                or evidence.block_timestamp <= terms.valid_before
+                or evidence.transaction_success
+                or evidence.transaction_hash is not None
+            ):
+                raise GateDenied("fixture_nonuse_not_proven")
+            phase, spent = "fixture_unused", 0
+        if row["phase"] in TERMINAL:
+            if row["phase"] != phase:
+                raise GateDenied("conflicting_terminal_fixture")
+            return
+        # Evidence can also fence a delayed signer; dispatch CAS then fails.
+        db.execute(
+            "UPDATE grants SET reserved=reserved-?,spent=spent+? WHERE grant_id=?",
+            (terms.amount, spent, row["grant_id"]),
+        )
+        db.execute(
+            "UPDATE x402_attempts SET phase=?,reason='offline_fixture_only',evidence=? "
+            "WHERE purchase_id=?",
+            (phase, canonical(evidence), terms.purchase_id),
+        )
+        Ledger._event(
+            db,
+            terms.purchase_id,
+            "offline_fixture_applied",
+            {"phase": phase, "evidence_hash": digest(evidence)},
+            now,
+        )
+
+    def record_observation(self, task_id: str, observation: Observation, now: int) -> dict:
+        """One transaction for validated records, terminal accounting and audit.
+
+        Event types are an additive protocol in the existing audit table. This
+        requires no new tables or cross-file transaction. Buyer version 3 keeps
+        older binaries from reopening this file and ignoring incident semantics.
+        Return this invocation's decision only after the transaction commits,
+        including when its identical audit event already exists.
+        """
+        if type(observation) is not Observation:
+            raise GateDenied("offline_observation_required")
+        try:
+            observation = Observation.model_validate_json(
+                observation.model_dump_json(warnings=False)
+            )
+        except (ValueError, TypeError, RecursionError):
+            raise GateDenied("invalid_offline_observation") from None
+        with self.db.transaction() as db:
             task = self._task(db, task_id)
             row = db.execute(
                 "SELECT * FROM x402_attempts WHERE purchase_id=?", (task["purchase_id"],)
@@ -262,55 +365,72 @@ class OfflineGateStore:
             if not row:
                 raise GateDenied("authorization_missing")
             terms = SigningTerms.model_validate_json(row["terms"])
-            if (
-                evidence.terms_hash != digest(terms)
-                or evidence.nonce != terms.nonce
-                or evidence.payer != terms.payer
-                or evidence.recipient != terms.recipient
-                or evidence.amount != terms.amount
-                or evidence.finality != "finalized"
-                or evidence.block_timestamp > now
-            ):
-                raise GateDenied("fixture_inconclusive_or_mismatched")
-            if evidence.kind == "transfer":
-                if (
-                    not evidence.transaction_success
-                    or not evidence.nonce_used
-                    or evidence.transaction_hash is None
-                    or not terms.valid_after < evidence.block_timestamp < terms.valid_before
-                ):
-                    raise GateDenied("fixture_transfer_not_proven")
-                phase, spent = "fixture_settled", terms.amount
-            else:
-                if (
-                    evidence.nonce_used
-                    or evidence.block_timestamp <= terms.valid_before
-                    or evidence.transaction_success
-                    or evidence.transaction_hash is not None
-                ):
-                    raise GateDenied("fixture_nonuse_not_proven")
-                phase, spent = "fixture_unused", 0
-            if row["phase"] in TERMINAL:
-                if row["phase"] != phase:
-                    raise GateDenied("conflicting_terminal_fixture")
-                return
-            # Evidence can also fence a delayed signer; dispatch CAS then fails.
-            db.execute(
-                "UPDATE grants SET reserved=reserved-?,spent=spent+? WHERE grant_id=?",
-                (terms.amount, spent, row["grant_id"]),
+            if observation.terms_hash != digest(terms):
+                raise GateDenied("observation_identity_mismatch")
+            evidence, reason = assess(terms, observation, now)
+            prior = (
+                FixtureEvidence.model_validate_json(row["evidence"]) if row["evidence"] else None
             )
-            db.execute(
-                "UPDATE x402_attempts SET phase=?,reason='offline_fixture_only',evidence=? "
-                "WHERE purchase_id=?",
-                (phase, canonical(evidence), terms.purchase_id),
+            incident = bool(prior and contradicts(terms, prior, observation, now, evidence))
+            frozen = bool(
+                db.execute(
+                    "SELECT 1 FROM events WHERE event_type='offline_reconciliation_incident' "
+                    "LIMIT 1"
+                ).fetchone()
             )
-            Ledger._event(
-                db,
-                terms.purchase_id,
-                "offline_fixture_applied",
-                {"phase": phase, "evidence_hash": digest(evidence)},
-                now,
+            outcome = (
+                "incident" if incident or frozen else (evidence.kind if evidence else "incomplete")
             )
+            if incident:
+                reason = "finality_contradiction"
+            elif frozen:
+                reason = "profile_frozen"
+            observation_hash = digest(observation)
+            # Deduplicate by the normalized records and decision. The same old
+            # records may become contradictory after another caller commits.
+            identity = digest(
+                {"observation": observation_hash, "outcome": outcome, "reason": reason}
+            )
+            previous = db.execute(
+                "SELECT data FROM events WHERE purchase_id=? "
+                "AND event_type='offline_reconciliation_observed' ORDER BY sequence",
+                (terms.purchase_id,),
+            ).fetchall()
+            if not any(json.loads(event["data"])["identity"] == identity for event in previous):
+                Ledger._event(
+                    db,
+                    terms.purchase_id,
+                    "offline_reconciliation_observed",
+                    {
+                        "identity": identity,
+                        "observation_hash": observation_hash,
+                        "outcome": outcome,
+                        "reason": reason,
+                        "records": observation.model_dump(mode="json"),
+                    },
+                    now,
+                )
+            if incident and not frozen:
+                Ledger._event(
+                    db,
+                    terms.purchase_id,
+                    "offline_reconciliation_incident",
+                    {
+                        "reason": "finality_contradiction",
+                        "observation_hash": observation_hash,
+                        "prior_evidence_hash": digest(prior),
+                    },
+                    now,
+                )
+            elif evidence and not frozen and not incident:
+                self._apply_fixture(db, row, evidence, now)
+        return {
+            "hash": observation_hash,
+            "outcome": outcome,
+            "reason": reason,
+            "reads_attempted": observation.reads_attempted,
+            "read_limit": observation.limits.max_reads,
+        }
 
     def report(self, task_id: str) -> dict:
         """Allowlist export, one read snapshot for state, balance and ordered events."""
@@ -329,6 +449,18 @@ class OfflineGateStore:
             events = db.execute(
                 "SELECT * FROM events WHERE purchase_id=? ORDER BY sequence", (task["purchase_id"],)
             ).fetchall()
+            incident = bool(
+                db.execute(
+                    "SELECT 1 FROM events WHERE event_type='offline_reconciliation_incident' "
+                    "LIMIT 1"
+                ).fetchone()
+            )
+            observations = [
+                json.loads(e["data"])
+                for e in events
+                if e["event_type"] == "offline_reconciliation_observed"
+            ]
+            last = observations[-1] if observations else None
         return {
             "mode": "offline_x402",
             "blockchain_settlement_verified": False,
@@ -344,6 +476,20 @@ class OfflineGateStore:
             "dispatch_may_have_occurred": bool(row and row["dispatch_authorized"]),
             "reconciliation_required": bool(row and row["phase"] not in TERMINAL),
             "delivery_state": "not_requested",
+            "reconciliation": {
+                "source": "offline_fixture",
+                "operator_incident": incident,
+                "observation_count": len(observations),
+                "last_observation": {
+                    "hash": last["observation_hash"],
+                    "outcome": last["outcome"],
+                    "reason": last["reason"],
+                    "reads_attempted": last["records"]["reads_attempted"],
+                    "read_limit": last["records"]["limits"]["max_reads"],
+                }
+                if last
+                else None,
+            },
             "budget": dict(grant),
             "events": [{**dict(event), "data": json.loads(event["data"])} for event in events],
         }

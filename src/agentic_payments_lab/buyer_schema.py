@@ -9,7 +9,9 @@ from uuid import uuid4
 from .domain import canonical
 from .storage import Database
 
-VERSION = 2  # Phase 2: 0; initial Phase 3B.1: 1; durable task cancellation: 2.
+# 0: Phase 2; 1: gate; 2: cancellation; 3: reconciliation incident enforcement.
+# Version 3 has the same tables as 2, but older binaries must not ignore incidents.
+VERSION = 3
 SIMULATION_PROFILE = {"mode": "simulated", "network": "simulation:local", "asset": "SIM-USDC"}
 ADDITIONS = """
 CREATE TABLE buyer_profile (
@@ -112,8 +114,8 @@ def _validate(db, base_schema: str, profile: dict, initialize: bool) -> int:
         if objects and (profile != SIMULATION_PROFILE or objects != _expected(base_schema)):
             raise SchemaError("Only the exact Phase 2 simulator schema can be upgraded")
     else:
-        schema = base_schema + ADDITIONS + (CANCELLATIONS if version == VERSION else "")
-        if version not in (1, VERSION) or objects != _expected(schema):
+        schema = base_schema + ADDITIONS + (CANCELLATIONS if version >= 2 else "")
+        if version not in (1, 2, VERSION) or objects != _expected(schema):
             raise SchemaError("Unknown or incomplete buyer schema; operator recovery required")
         rows = db.execute("SELECT data FROM buyer_profile").fetchall()
         if len(rows) != 1 or rows[0]["data"] != canonical(profile):
@@ -146,8 +148,9 @@ def open_buyer_database(
                 _ddl(db, base_schema)
             _ddl(db, ADDITIONS)
             db.execute("INSERT INTO buyer_profile VALUES(1,?,?)", (uuid4().hex, canonical(profile)))
-        if version < VERSION:
+        if version < 2:
             _ddl(db, CANCELLATIONS)
+        if version < VERSION:
             db.execute(f"PRAGMA user_version={VERSION}")
     # SQLite cannot switch to WAL inside the migration transaction. A failure
     # here leaves a valid committed schema, never an implicitly repaired one;

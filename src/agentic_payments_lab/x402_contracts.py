@@ -4,12 +4,15 @@ Addresses and nonces below are public data. Nothing in this module can sign,
 send HTTP, observe a chain, or authorize the existing simulator adapter.
 """
 
-from typing import Annotated, Literal, Protocol
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, ValidationError, model_validator
 
 from .domain import Atomic, Grant, Identifier, Model, PurchaseRequest, Timestamp, digest
+
+if TYPE_CHECKING:
+    from .x402_evidence import Observation
 
 NETWORK = "eip155:84532"
 ASSET = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
@@ -170,6 +173,6 @@ class FixtureEvidence(StrictModel):
 
 
 class ReconciliationObserver(Protocol):
-    """Interface only. Phase 3B.1 supplies no live observer or startup caller."""
+    """Read-only observation contract; only the closed offline fixture source exists."""
 
-    async def observe(self, terms: SigningTerms) -> FixtureEvidence: ...
+    async def observe(self, terms: SigningTerms) -> "Observation": ...

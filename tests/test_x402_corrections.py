@@ -386,7 +386,7 @@ def test_v1_upgrade_keeps_original_authorizations_and_new_fences(tmp_path):
         assert report["budget"] == {"budget": 30_000, "reserved": 30_000, "spent": 0}
     assert_counts(signer, dispatcher, (0, 0))
     with store.db.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("SELECT count(*) FROM x402_cancellations").fetchone()[0] == 0
     store.cancel("not-started", NOW)
@@ -426,7 +426,7 @@ def test_failed_v1_upgrade_preserves_schema_journal_and_every_original_row(
                         failure == "version"
                         and action == sqlite3.SQLITE_PRAGMA
                         and a == "user_version"
-                        and b == "2"
+                        and b == "3"
                     )
                     or (
                         failure == "commit"
@@ -477,7 +477,7 @@ def test_concurrent_v1_upgrade_processes_preserve_history(tmp_path):
     assert not calls.exists()
     assert v1_rows(path) == before
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_schema_revalidated_under_lock_before_any_persistent_change(tmp_path, monkeypatch):
@@ -525,7 +525,7 @@ def test_wal_configuration_failure_keeps_committed_upgrade_reopenable(tmp_path, 
         Ledger(path, Policy(default_catalog()))
     monkeypatch.undo()
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
     assert original_rows(path) == before
     ledger = Ledger(path, Policy(default_catalog()))

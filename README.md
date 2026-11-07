@@ -48,8 +48,18 @@ explicit host Python adapter and the deterministic scripted model. The same four
 tools use durable task/profile/request-bound quotes and the original single-attempt
 gate. The simulator remains the CLI default. Fixture reconciliation and delivery
 acceptance stay separate operator actions; agent status and retries perform neither.
-This new slice is uncommitted for review. See the
+Published with its reviewed concurrency correction at
+[`6198c97`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128);
+the [exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42416229737)
+passed 657 tests, isolation/subprocess checks and repeated demos. See the
 [offline buyer contract, recovery and validation](docs/phase3b5.md).
+
+**Phase 3B.6 adds offline evaluation and call-budget preparation**, left uncommitted
+for review. Its evaluator scores real fixture ledger/authority records and tool
+traces. A separate simulator suite exercises the pinned Responses wire path through
+an in-memory transport, with complete serialized-body bounds and durable planning
+reservations. It makes no API calls and does not enable live models on the x402
+buyer. See [evaluation, accounting and remaining prerequisites](docs/phase3b6.md).
 
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative

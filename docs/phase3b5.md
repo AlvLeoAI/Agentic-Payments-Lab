@@ -192,8 +192,16 @@ a killed-waiter regression rejects stale readiness without execution.
 Worker stdout/stderr, reports and arrival/release/exit timing are written directly
 to disposable files. Failures preserve these files and database snapshots outside
 the validator's temporary tree and print full diagnostics in pytest output, avoiding
-an abbreviated list representation. Local passing checks do not establish hosted
-acceptance; the correction remains uncommitted for independent review.
+an abbreviated list representation.
+
+The reviewed five-file correction was subsequently published at
+[`6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128).
+Its [exact-SHA hosted workflow](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42416229737)
+completed successfully: **657 tests in 195.43 seconds**, Ruff, 80 formatted files,
+lock validation, loopback-only OS network isolation inherited by subprocesses,
+and the repeated simulator/free/paid/unaffordable demos. This closes the offline
+publication hold. It does not establish the cause of the older truncated failure
+or remediate the operator's local SQLite installation.
 
 Live integration remains blocked by the unresolved local SQLite WAL-reset fix
 prerequisite and the separately scoped signer interoperability, external merchant,

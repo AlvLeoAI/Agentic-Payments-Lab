@@ -30,6 +30,12 @@ Model mode is distinct from payment backend; fixture reports never contain a
 simulator receipt or claim blockchain settlement. Agent status, continuation and
 cleanup cannot reconcile, retrieve/accept delivery, repair or retry payment.
 Live model activation on the offline x402 buyer is blocked.
+Phase 3B.6 permits the offline evaluator and a separate simulator Responses-mock
+suite. Call-budget batches require explicit fresh initialization; missing history,
+incomplete invocations, unknown usage and unverified response model/tier fail closed.
+Keep the entire serialized request bounded before mock dispatch. Planning cost
+reservations are not billing caps or exact token bounds. No live transport, automatic
+resume, budget reset, UI or deployment is authorized by this slice.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the locked environment with `uv sync --locked`.

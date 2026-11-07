@@ -36,7 +36,7 @@ def require_isolation(parent_namespace: str) -> None:
     )
 
 
-def validate(uv: str) -> None:
+def validate(uv: str, parent_namespace: str) -> None:
     with tempfile.TemporaryDirectory(prefix="payments-offline-validation-") as directory:
         temporary = Path(directory)
         environment = {
@@ -191,6 +191,18 @@ def validate(uv: str) -> None:
                 flush=True,
             )
 
+        run(
+            "run",
+            "--offline",
+            "--no-sync",
+            "python",
+            "scripts/evaluate_offline.py",
+            "--state-dir",
+            str(temporary / "evaluation"),
+            "--parent-netns",
+            parent_namespace,
+        )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -202,7 +214,7 @@ def main() -> None:
     if not Path(args.uv).is_absolute():
         raise SystemExit("--uv must be an absolute executable path")
     require_isolation(args.parent_netns)
-    validate(args.uv)
+    validate(args.uv, args.parent_netns)
 
 
 if __name__ == "__main__":

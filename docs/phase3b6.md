@@ -1,9 +1,14 @@
 # Phase 3B.6 — offline evaluation and call-budget preparation
 
 Built on accepted offline commit `6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128`.
-This slice remains uncommitted for review. It makes no live OpenAI or payment calls,
+Published at `bcaa94c0c2a8baa4abb673f3db25ac58450f0832`; its
+[exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42424403222)
+passed 708 tests, isolation/subprocess checks, repeated demos and both evaluator suites.
+It makes no live OpenAI or payment calls,
 loads no credentials, and changes no dependency versions or retained databases.
 It does not authorize a live pilot, UI, cloud infrastructure or deployment.
+The later [Phase 3B.7 preparation](phase3b7.md) adds a separate sourced-price path
+and pinned runtime; this milestone's original evaluator retains its synthetic rates.
 
 ## Executable evaluation
 

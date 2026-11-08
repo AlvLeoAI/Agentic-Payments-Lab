@@ -15,6 +15,7 @@ from ..coordinator import BuyerSession
 from .boundary import ARGUMENTS
 from .call_budget import BudgetDenied, CallBudget
 from .contracts import Settings
+from .pilot_pricing import LunaRates
 from .runner import CLEANUP_TIMEOUT, run_buyer
 
 
@@ -46,7 +47,7 @@ class BudgetedMockTransport(httpx2.AsyncBaseTransport):
         if len(body) > limits.max_request_bytes:
             raise BudgetDenied("serialized_request_limit")
         try:
-            data = json.loads(body)
+            data = json.loads(body, object_pairs_hook=_unique_fields)
             valid = (
                 data["model"] == limits.model
                 and data["reasoning"] == {"effort": limits.reasoning_effort}
@@ -62,6 +63,26 @@ class BudgetedMockTransport(httpx2.AsyncBaseTransport):
                 and {tool["name"] for tool in data["tools"]} == set(ARGUMENTS)
                 and all(t["type"] == "function" and t["strict"] is True for t in data["tools"])
             )
+            if isinstance(limits.rates, LunaRates):
+                # Reject options that can introduce unsupported pricing or hidden
+                # server-side work. Cache defaults are documented 30m; reserve 12h.
+                valid = valid and set(data) <= {
+                    "input",
+                    "instructions",
+                    "model",
+                    "reasoning",
+                    "service_tier",
+                    "max_output_tokens",
+                    "parallel_tool_calls",
+                    "store",
+                    "truncation",
+                    "stream",
+                    "text",
+                    "tools",
+                    "include",
+                    "prompt_cache_key",
+                }
+                valid = valid and data.get("include", []) in ([], ["reasoning.encrypted_content"])
         except (ValueError, KeyError, TypeError):
             valid = False
         if not valid:

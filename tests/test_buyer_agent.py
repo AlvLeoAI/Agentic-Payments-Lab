@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sqlite3
+from contextlib import closing
 
 import pytest
 from agents import Model
@@ -43,11 +44,31 @@ class SequenceModel(Model):
 
 def authority(runtime):
     # Query the payment authority directly; do not infer charges from agent reports.
-    with sqlite3.connect(runtime.payments.db.path) as db:
+    with closing(sqlite3.connect(runtime.payments.db.path)) as db:
         outcomes = [json.loads(row[0]) for row in db.execute("SELECT result FROM authorizations")]
         attempts = db.execute("SELECT count(*) FROM attempts").fetchone()[0]
     settled = [item for item in outcomes if item["status"] == "settled"]
     return attempts, len(settled), sum(item["receipt"]["intent"]["amount"] for item in settled)
+
+
+def test_authority_inspection_closes_connection_before_return(runtime, monkeypatch):
+    original = sqlite3.connect
+    connections = []
+
+    def tracked(*args, **kwargs):
+        connection = original(*args, **kwargs)
+        connections.append(connection)  # Prevent GC from hiding a leaked connection.
+        return connection
+
+    with monkeypatch.context() as patch:
+        patch.setattr(sqlite3, "connect", tracked)
+        assert authority(runtime) == (0, 0, 0)
+    assert len(connections) == 1
+    try:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connections[0].execute("SELECT 1")
+    finally:
+        connections[0].close()
 
 
 def initialized_store(runtime, tmp_path, goal=GOAL, task="task"):

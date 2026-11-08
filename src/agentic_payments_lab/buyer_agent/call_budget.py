@@ -1,8 +1,8 @@
 """Explicit offline call-budget journal. Owns no purchase or payment authority.
 
 Only fresh, operator-initialized batches exist. Reopen never initializes, resumes,
-releases an uncertain reservation, or resets a counter. Costs are synthetic
-planning estimates in USD nanounits, not provider billing guarantees.
+releases an uncertain reservation, or resets a counter. Costs use a labelled
+synthetic or sourced card in USD nanounits, not provider billing guarantees.
 """
 
 import hashlib
@@ -18,6 +18,7 @@ from pydantic import Field, model_validator
 
 from ..domain import canonical
 from ..x402_contracts import StrictModel
+from .pilot_pricing import LunaRates
 
 Count = Annotated[int, Field(strict=True, ge=0, le=1_000_000_000)]
 Positive = Annotated[int, Field(strict=True, ge=1, le=1_000_000)]
@@ -54,7 +55,19 @@ class CallLimits(StrictModel):
     input_tokens_per_byte: Annotated[int, Field(strict=True, ge=1, le=4)] = 1
     framing_tokens: Annotated[int, Field(strict=True, ge=0, le=8192)] = 1024
     estimate_ceiling_nano_usd: Annotated[int, Field(strict=True, ge=0, le=10**15)]
-    rates: PlanningRates
+    rates: PlanningRates | LunaRates
+
+    @model_validator(mode="after")
+    def direct_luna_assumptions(self):
+        if isinstance(self.rates, LunaRates) and (
+            self.model != "gpt-6-luna"
+            or self.reasoning_effort != "none"
+            or self.max_request_bytes > 32_768
+            or self.input_tokens_per_byte != 1
+            or self.framing_tokens != 1024
+        ):
+            raise ValueError("Unsupported direct Luna planning assumptions")
+        return self
 
 
 SCHEMA = """
@@ -88,7 +101,7 @@ class BudgetDenied(RuntimeError):
     """Fixed application codes only; never includes prompts, responses or exceptions."""
 
 
-def usage_evidence(raw) -> tuple[dict, bool]:
+def usage_evidence(raw, *, cache_lifetimes=False) -> tuple[dict, bool]:
     """Retain individually valid observed categories; missing is None, never zero."""
     raw = raw if type(raw) is dict else {}
     inputs = raw.get("input_tokens_details")
@@ -103,6 +116,13 @@ def usage_evidence(raw) -> tuple[dict, bool]:
         "cache_write_tokens": inputs.get("cache_write_tokens"),
         "reasoning_tokens": outputs.get("reasoning_tokens"),
     }
+    lifetimes = inputs.get("cache_write_tokens_details")
+    lifetimes = lifetimes if type(lifetimes) is dict else {}
+    if cache_lifetimes:
+        values.update(
+            ttl_30m_tokens=lifetimes.get("ttl_30m_tokens"),
+            ttl_12h_tokens=lifetimes.get("ttl_12h_tokens"),
+        )
     known = {k: v if type(v) is int and 0 <= v <= 10**9 else None for k, v in values.items()}
     complete = (
         all(v is not None for v in known.values())
@@ -114,8 +134,11 @@ def usage_evidence(raw) -> tuple[dict, bool]:
             "input_tokens_details",
             "output_tokens_details",
         }
-        and set(inputs) == {"cached_tokens", "cache_write_tokens"}
+        and set(inputs)
+        == {"cached_tokens", "cache_write_tokens"}
+        | ({"cache_write_tokens_details"} if cache_lifetimes else set())
         and set(outputs) == {"reasoning_tokens"}
+        and (not cache_lifetimes or set(lifetimes) == {"ttl_30m_tokens", "ttl_12h_tokens"})
     )
     if complete:
         complete = bool(
@@ -124,6 +147,10 @@ def usage_evidence(raw) -> tuple[dict, bool]:
             and known["cache_write_tokens"] <= known["input_tokens"]
             and known["cached_tokens"] + known["cache_write_tokens"] <= known["input_tokens"]
             and known["reasoning_tokens"] <= known["output_tokens"]
+            and (
+                not cache_lifetimes
+                or known["ttl_30m_tokens"] + known["ttl_12h_tokens"] == known["cache_write_tokens"]
+            )
         )
     return known, complete
 
@@ -217,10 +244,12 @@ class CallBudget:
         if type(body) is not bytes or len(body) > limits.max_request_bytes:
             raise BudgetDenied("serialized_request_limit")
         tokens = len(body) * limits.input_tokens_per_byte + limits.framing_tokens
-        amount = (
-            tokens * (limits.rates.input_nano_usd + limits.rates.cache_write_surcharge_nano_usd)
-            + limits.max_output_tokens * limits.rates.output_nano_usd
+        input_rate = (
+            limits.rates.write_12h_nano_usd
+            if isinstance(limits.rates, LunaRates)
+            else limits.rates.input_nano_usd + limits.rates.cache_write_surcharge_nano_usd
         )
+        amount = tokens * input_rate + limits.max_output_tokens * limits.rates.output_nano_usd
         request_id = uuid4().hex
         with self.connect(write=True) as db:
             running = db.execute(
@@ -261,7 +290,8 @@ class CallBudget:
         return request_id
 
     def observe(self, request_id: str, raw_usage, returned_tier, returned_model) -> bool:
-        usage, complete = usage_evidence(raw_usage)
+        direct_luna = isinstance(self.limits.rates, LunaRates)
+        usage, complete = usage_evidence(raw_usage, cache_lifetimes=direct_luna)
         # Unknown/malformed categories are retained without inventing zero usage.
         rates = self.limits.rates
         estimate = None
@@ -271,7 +301,10 @@ class CallBudget:
             and type(returned_model) is str
             and returned_model == self.limits.model
         )
-        if complete and identity_verified:
+        price_verified = not direct_luna or (complete and usage["input_tokens"] <= 272_000)
+        if complete and identity_verified and price_verified and direct_luna:
+            estimate = rates.estimate(usage)
+        elif complete and identity_verified and price_verified:
             estimate = (
                 (usage["input_tokens"] - usage["cached_tokens"]) * rates.input_nano_usd
                 + usage["cached_tokens"] * rates.cached_input_nano_usd
@@ -292,6 +325,8 @@ class CallBudget:
             reason = "observed_usage" if complete else "usage_incomplete"
             if complete and not identity_verified:
                 status, reason = "unverified", "response_identity_unverified"
+            elif complete and not price_verified:
+                status, reason = "unverified", "pricing_assumptions_unverified"
             elif complete and (
                 estimate > row["reserved_nano"]
                 or usage["input_tokens"] > row["estimated_input_tokens"]
@@ -344,7 +379,9 @@ class CallBudget:
             "usage_complete": all(
                 r["status"] in ("complete", "overrun", "unverified") for r in requests
             ),
-            "cache_write_lifetime": "unknown_in_pinned_usage_schema",
+            "cache_write_lifetime": "documented_30m_and_12h"
+            if isinstance(self.limits.rates, LunaRates)
+            else "unknown_in_pinned_usage_schema",
             "accounting_complete": not incomplete,
             "blocked": incomplete or any(i["status"] == "running" for i in invocations),
             "known_estimate_nano_usd": (

@@ -36,11 +36,22 @@ incomplete invocations, unknown usage and unverified response model/tier fail cl
 Keep the entire serialized request bounded before mock dispatch. Planning cost
 reservations are not billing caps or exact token bounds. No live transport, automatic
 resume, budget reset, UI or deployment is authorized by this slice.
+Phase 3B.7 prepares a simulator-only pilot with a sourced immutable Luna rate card
+and documented cache-write lifetimes, still through in-memory Responses mocks.
+Use the pinned Linux x86_64 runtime under `.runtime/`; its actual Python executable
+and embedded SQLite fix provenance must pass `require_pilot_runtime()`. The old
+`.venv`/system SQLite remains unpatched. `initialize_pilot` checks the runtime before
+creating fresh state; lower-level host objects and legacy APIs are not a global
+runtime sandbox. Never open retained state through initialization, enable live
+transport, load credentials or treat a planning ceiling as spending authorization.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
-- Install the locked environment with `uv sync --locked`.
+- Install the isolated runtime with `python3 scripts/prepare_runtime.py`, then use
+  `UV_PROJECT_ENVIRONMENT=.runtime/venv uv sync --locked --no-python-downloads
+  --python .runtime/cpython-3.12.16-20261026/bin/python3.12`.
 - Verify with `uv run --offline --no-sync pytest`, `uv run --offline --no-sync ruff check .`,
-  and `uv run --offline --no-sync ruff format --check .`.
+  and `uv run --offline --no-sync ruff format --check .`, selecting
+  `UV_PROJECT_ENVIRONMENT=.runtime/venv`. Full runtime validation stays OS-isolated.
 - Run the credential-free demo with `uv run --offline --no-sync payments-lab demo`.
 - Preserve integer atomic amounts, transactional budget reservations, immutable
   purchase identity, and the separation of payment and delivery states.

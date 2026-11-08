@@ -214,6 +214,9 @@ def main() -> None:
     if not Path(args.uv).is_absolute():
         raise SystemExit("--uv must be an absolute executable path")
     require_isolation(args.parent_netns)
+    from agentic_payments_lab.runtime_guard import require_pilot_runtime
+
+    print(json.dumps({"verified_runtime": require_pilot_runtime()}), flush=True)
     validate(args.uv, args.parent_netns)
 
 

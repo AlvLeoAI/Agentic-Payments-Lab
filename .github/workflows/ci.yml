@@ -19,7 +19,11 @@ jobs:
       - name: Install pinned uv
         run: python -m pip install uv==0.11.7
       - name: Install locked dependencies
-        run: uv sync --locked
+        env:
+          UV_PROJECT_ENVIRONMENT: .runtime/venv
+        run: |
+          python scripts/prepare_runtime.py
+          uv sync --locked --no-python-downloads --python .runtime/cpython-3.12.16-20261026/bin/python3.12
       - name: Validate with OS-level network isolation
         shell: bash
         run: |
@@ -29,5 +33,5 @@ jobs:
           # A privileged network namespace avoids dependence on the runner's
           # unprivileged-user-namespace policy. Any setup failure fails the job.
           sudo --non-interactive unshare --net -- \
-            "$PWD/.venv/bin/python" scripts/validate_offline.py \
+            "$PWD/.runtime/venv/bin/python" scripts/validate_offline.py \
             --parent-netns "$parent_netns" --uv "$uv_executable"

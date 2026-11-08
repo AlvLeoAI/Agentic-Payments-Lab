@@ -13,6 +13,7 @@ from offline_buyer_processes import competing_buyers
 from offline_buyer_support import counters, drive, finance, quote, setup
 from test_buyer_agent import SequenceModel
 
+from agentic_payments_lab.buyer_agent import runner as buyer_runner
 from agentic_payments_lab.buyer_agent.contracts import Settings
 from agentic_payments_lab.buyer_agent.offline_x402 import OfflineBoundary
 from agentic_payments_lab.buyer_agent.runner import run_buyer
@@ -96,9 +97,25 @@ def test_external_cancellation_preserves_partial_usage_and_original_finance(tmp_
 
 @pytest.mark.parametrize("where", ["challenge", "model"])
 @pytest.mark.parametrize("kind", ["cancel", "timeout"])
-def test_late_response_cannot_claim_or_sign(tmp_path, where, kind):
+def test_late_response_cannot_claim_or_sign(tmp_path, monkeypatch, where, kind):
     shop, buyer, metadata, goal = setup(tmp_path)
     ready = asyncio.Event()
+    late_returned = asyncio.Event()
+
+    class CheckpointTimeout:
+        CancelledError = asyncio.CancelledError
+
+        def timeout(self, seconds):
+            assert seconds == 0.1
+            # Target cancellation at the selected await, not during the earlier
+            # SDK/SQLite work. Keep the real asyncio timeout and its conversion
+            # to TimeoutError; other modules' timers remain untouched.
+            self.scope = asyncio.timeout(None)
+            return self.scope
+
+    controlled = CheckpointTimeout()
+    if kind == "timeout":
+        monkeypatch.setattr(buyer_runner, "asyncio", controlled)
     if where == "challenge":
         original = buyer.client.challenge
 
@@ -108,6 +125,7 @@ def test_late_response_cannot_claim_or_sign(tmp_path, where, kind):
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
+                late_returned.set()
                 return result
 
         buyer.client.challenge = late
@@ -120,6 +138,7 @@ def test_late_response_cannot_claim_or_sign(tmp_path, where, kind):
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
+                late_returned.set()
                 return tool_response("purchase", {"quote_id": handle}, "late")
 
         model = SequenceModel([late])
@@ -138,15 +157,55 @@ def test_late_response_cannot_claim_or_sign(tmp_path, where, kind):
         if kind == "cancel":
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
-                await task
+                await asyncio.wait_for(task, 5)
         else:
-            assert (await task).termination == "timeout"
+            assert controlled.scope.when() is None
+            controlled.scope.reschedule(asyncio.get_running_loop().time())
+            assert (await asyncio.wait_for(task, 5)).termination == "timeout"
+            assert controlled.scope.expired()
+        assert late_returned.is_set()  # The cancellation fence sees a late result.
 
     asyncio.run(execute())
     assert counters(shop) == (0, 0, 0, 0, 0)
     assert finance(shop) == (0, 0)
     assert shop.buyer.report("task")["authorization_id"] is None
     assert last_run(metadata)["termination"] == ("cancelled" if kind == "cancel" else "timeout")
+
+
+def test_timeout_before_challenge_does_not_require_later_checkpoint(tmp_path):
+    shop, buyer, metadata, goal = setup(tmp_path)
+    challenges = []
+
+    async def unexpected_challenge(*args):
+        challenges.append("challenge")
+        raise AssertionError("A pending first model response cannot request a quote")
+
+    async def pending(_):
+        await asyncio.Event().wait()
+
+    buyer.client.challenge = unexpected_challenge
+    # Use the unmodified runner's actual timer. A timeout may occur before any
+    # response/checkpoint; waiting for a later challenge would conceal its result.
+    report = asyncio.run(
+        run_buyer(
+            buyer,
+            metadata,
+            goal,
+            Settings(timeout_seconds=0.1),
+            model=SequenceModel([pending]),
+        )
+    )
+    assert report.termination == "timeout" and report.run_complete
+    assert report.metadata_persisted and challenges == []
+    usage = report.model_usage
+    assert usage.responses_received == 0
+    assert usage.unresolved_requests == usage.requests_started
+    assert usage.incomplete == (usage.requests_started > 0)
+    assert counters(shop) == (0, 0, 0, 0, 0)
+    assert finance(shop) == (0, 0)
+    assert shop.buyer.report("task")["authorization_id"] is None
+    # Model explanations are deliberately excluded from durable agent metadata.
+    assert last_run(metadata) == report.model_dump(mode="json", exclude={"model_explanation"})
 
 
 def test_cancellation_during_signing_keeps_claim_and_fences_late_signer(tmp_path):

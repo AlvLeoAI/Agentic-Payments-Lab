@@ -54,12 +54,21 @@ the [exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/acti
 passed 657 tests, isolation/subprocess checks and repeated demos. See the
 [offline buyer contract, recovery and validation](docs/phase3b5.md).
 
-**Phase 3B.6 adds offline evaluation and call-budget preparation**, left uncommitted
-for review. Its evaluator scores real fixture ledger/authority records and tool
+**Phase 3B.6 adds offline evaluation and call-budget preparation**, published at
+[`bcaa94c`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/bcaa94c0c2a8baa4abb673f3db25ac58450f0832)
+with [708 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42424403222).
+Its evaluator scores real fixture ledger/authority records and tool
 traces. A separate simulator suite exercises the pinned Responses wire path through
 an in-memory transport, with complete serialized-body bounds and durable planning
 reservations. It makes no API calls and does not enable live models on the x402
 buyer. See [evaluation, accounting and remaining prerequisites](docs/phase3b6.md).
+
+**Phase 3B.7 prepares a guarded simulator pilot offline**, with a checksum-pinned
+Python 3.12.16 / SQLite 3.53.1 runtime, sourced Luna pricing and cache-write lifetime
+accounting. Its supported fresh-state initializer checks the actual runtime before
+opening durable state. Responses still use in-memory mocks; live activation is
+rejected. The existing `.venv`/system SQLite remains unpatched. This preparation
+is uncommitted; see [runtime provenance, usage and future approval](docs/phase3b7.md).
 
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
@@ -190,7 +199,15 @@ contents is an error, so use a new state directory for a new timed scenario.
 
 ## Validation
 
+The full suite now requires the separately installed, verified Linux x86_64 runtime.
+The original `.venv` remains available for legacy simulator use; these commands do
+not replace it or open retained state. Installation may access package sources:
+
 ```bash
+python3 scripts/prepare_runtime.py
+UV_PROJECT_ENVIRONMENT=.runtime/venv uv sync --locked --no-python-downloads \
+  --python .runtime/cpython-3.12.16-20261026/bin/python3.12
+export UV_PROJECT_ENVIRONMENT=.runtime/venv
 uv run --offline --no-sync pytest -q
 uv run --offline --no-sync ruff check .
 uv run --offline --no-sync ruff format --check .
@@ -201,10 +218,9 @@ To run the complete validation under OS-level network isolation on Linux, instal
 dependencies first, then run:
 
 ```bash
-uv sync --locked
 parent_netns=$(readlink /proc/self/ns/net)
 unshare --user --map-root-user --net -- \
-  .venv/bin/python scripts/validate_offline.py \
+  .runtime/venv/bin/python scripts/validate_offline.py \
   --parent-netns "$parent_netns" --uv "$(command -v uv)"
 ```
 
@@ -225,11 +241,13 @@ Socket/DNS patches in tests provide additional
 checks but do not establish OS-level isolation. Likewise, `uv --offline` restricts
 dependency access, not application networking.
 
-CI targets Ubuntu 24.04. After dependency installation, it uses
+CI targets Ubuntu 24.04. The pending configuration installs the same checksum-pinned
+runtime and locked dependencies before isolation. It uses
 `sudo --non-interactive unshare --net` to run this same validator, including all test
 and demo subprocesses, in an isolated network namespace. CI requires passwordless
 sudo and network namespace support, avoiding reliance on unprivileged user namespace
-policy. The local command above requires unprivileged user namespaces. A CI workflow
+policy. This Phase 3B.7 workflow change has not run on hosted CI.
+The local command above requires unprivileged user namespaces. A CI workflow
 in the repository does not imply a hosted run has already succeeded; check GitHub
 Actions after publishing an approved commit.
 

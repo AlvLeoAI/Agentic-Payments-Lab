@@ -68,7 +68,19 @@ Python 3.12.16 / SQLite 3.53.1 runtime, sourced Luna pricing and cache-write lif
 accounting. Its supported fresh-state initializer checks the actual runtime before
 opening durable state. Responses still use in-memory mocks; live activation is
 rejected. The existing `.venv`/system SQLite remains unpatched. This preparation
-is uncommitted; see [runtime provenance, usage and future approval](docs/phase3b7.md).
+was published at
+[`4580e76`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/4580e764cdac9925def8510be2e845c611de9af8)
+with [770 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42434354806).
+See [runtime provenance and usage](docs/phase3b7.md).
+
+**Phase 3B.8 adds guarded simulator live-pilot activation.** Offline validation
+covers the shared request/cost envelope, exact routing, serialized policy and
+incremental raw usage. A separately authorized Luna pilot completed purchase,
+same-purchase replay and unaffordable refusal on 2026-11-08: ten new requests,
+one simulated charge and no duplicate execution. Its USD 0.0007724 usage-based
+estimate is separate from the original stopped request's unchanged USD 0.001239
+reservation. No further live calls are authorized by this milestone. See the
+[sanitized pilot evidence, activation boundaries and limitations](docs/phase3b8.md).
 
 The buyer uses the official Python Agents SDK with Responses and four bounded
 tools. Real payment integrations require another approved phase. No alternative
@@ -241,15 +253,18 @@ Socket/DNS patches in tests provide additional
 checks but do not establish OS-level isolation. Likewise, `uv --offline` restricts
 dependency access, not application networking.
 
-CI targets Ubuntu 24.04. The pending configuration installs the same checksum-pinned
+CI targets Ubuntu 24.04. The configuration installs the same checksum-pinned
 runtime and locked dependencies before isolation. It uses
 `sudo --non-interactive unshare --net` to run this same validator, including all test
 and demo subprocesses, in an isolated network namespace. CI requires passwordless
 sudo and network namespace support, avoiding reliance on unprivileged user namespace
-policy. This Phase 3B.7 workflow change has not run on hosted CI.
-The local command above requires unprivileged user namespaces. A CI workflow
-in the repository does not imply a hosted run has already succeeded; check GitHub
-Actions after publishing an approved commit.
+policy. The [Phase 3B.7 hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42434354806)
+for exact commit `4580e764cdac9925def8510be2e845c611de9af8` succeeded: 770 tests,
+verified namespace/subprocess isolation, repeated simulator and agent demos, and
+offline evaluation. That result covers the Phase 3B.7 baseline; each later commit
+requires its own exact-SHA hosted result. Hosted runtime verification does not patch
+the operator's old `.venv` or system SQLite. The local command above requires
+unprivileged user namespaces.
 
 ## Repository structure
 

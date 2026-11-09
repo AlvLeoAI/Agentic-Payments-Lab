@@ -1,7 +1,10 @@
 # Phase 3B.7 — isolated runtime and offline simulator pilot preparation
 
-Built on accepted `bcaa94c0c2a8baa4abb673f3db25ac58450f0832`. This slice is
-uncommitted preparation, not a live pilot. No credentials, model-access probes,
+Built on accepted `bcaa94c0c2a8baa4abb673f3db25ac58450f0832`, this offline preparation
+was published at
+[`4580e764cdac9925def8510be2e845c611de9af8`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/4580e764cdac9925def8510be2e845c611de9af8).
+The separately authorized live-model simulator pilot is documented in
+[Phase 3B.8](phase3b8.md). No credentials, model-access probes,
 OpenAI requests, real payments, external merchant/RPC/facilitator calls, deployment,
 system-package changes or retained-database migrations are part of this work.
 
@@ -61,7 +64,7 @@ No shell startup file, global PATH, system package, default `.python-version`, o
 virtual environment, dependency definition or lock pin is changed. The full validator
 checks the selected runtime as well as namespace isolation; subprocesses inherit
 both the isolated namespace and chosen virtual environment. CI is configured to
-install this same artifact before isolation; a hosted run is still pending publication.
+install this same artifact before isolation; the exact-SHA hosted result is recorded below.
 
 ## Supported entry point and authority
 
@@ -194,6 +197,11 @@ initialization refusal still preserves every file and byte, including after garb
 collection. WAL/SHM disappearance from delayed test-reader cleanup is not attributed
 to an application migration or ignored by the preservation assertions.
 
-The final validation report is retained outside the repository. Local checks and
-any future hosted workflow results must be reported separately. No hosted Phase 3B.7
-run or live pilot has been performed.
+The local validation report is retained outside the repository. Separately, the
+[hosted workflow for exact commit `4580e764`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42434354806)
+completed successfully on 2026-11-08: 770 tests passed in 207.18 seconds, with
+lockfile/lint/format checks, verified namespace and subprocess isolation, two
+identical simulator demos, repeated free/paid/unaffordable agent scenarios and the
+offline evaluator. Its logs verified the selected runtime before execution. This
+result covers Phase 3B.7, not later source changes, and does not patch the operator's
+old `.venv` or system SQLite. Phase 3B.7 itself made no live model calls.

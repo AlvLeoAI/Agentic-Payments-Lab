@@ -101,8 +101,30 @@ class BudgetDenied(RuntimeError):
     """Fixed application codes only; never includes prompts, responses or exceptions."""
 
 
-def usage_evidence(raw, *, cache_lifetimes=False) -> tuple[dict, bool]:
-    """Retain individually valid observed categories; missing is None, never zero."""
+def _field_kind(data, key):
+    """Bounded provenance tags, never arbitrary field values or exception text."""
+    if key not in data:
+        return "absent"
+    value = data[key]
+    if value is None:
+        return "null"
+    return {
+        bool: "boolean",
+        int: "integer",
+        float: "number",
+        str: "string",
+        list: "array",
+        dict: "object",
+    }.get(type(value), "unsupported")
+
+
+def usage_evidence(raw, *, cache_lifetimes=False, allow_zero_allocation=False) -> tuple[dict, bool]:
+    """Preserve observed counts; prospective zero derivations remain separate.
+
+    The opt-in is for a newly observed, identity-verified Luna response only.
+    Nonnegative disjoint allocations of an explicit zero total must both be zero.
+    This does not claim the missing/null details were reported by the provider.
+    """
     raw = raw if type(raw) is dict else {}
     inputs = raw.get("input_tokens_details")
     outputs = raw.get("output_tokens_details")
@@ -116,14 +138,10 @@ def usage_evidence(raw, *, cache_lifetimes=False) -> tuple[dict, bool]:
         "cache_write_tokens": inputs.get("cache_write_tokens"),
         "reasoning_tokens": outputs.get("reasoning_tokens"),
     }
-    lifetimes = inputs.get("cache_write_tokens_details")
-    lifetimes = lifetimes if type(lifetimes) is dict else {}
-    if cache_lifetimes:
-        values.update(
-            ttl_30m_tokens=lifetimes.get("ttl_30m_tokens"),
-            ttl_12h_tokens=lifetimes.get("ttl_12h_tokens"),
-        )
     known = {k: v if type(v) is int and 0 <= v <= 10**9 else None for k, v in values.items()}
+    input_fields = {"cached_tokens", "cache_write_tokens"}
+    if cache_lifetimes and "cache_write_tokens_details" in inputs:
+        input_fields.add("cache_write_tokens_details")
     complete = (
         all(v is not None for v in known.values())
         and set(raw)
@@ -134,11 +152,8 @@ def usage_evidence(raw, *, cache_lifetimes=False) -> tuple[dict, bool]:
             "input_tokens_details",
             "output_tokens_details",
         }
-        and set(inputs)
-        == {"cached_tokens", "cache_write_tokens"}
-        | ({"cache_write_tokens_details"} if cache_lifetimes else set())
+        and set(inputs) == input_fields
         and set(outputs) == {"reasoning_tokens"}
-        and (not cache_lifetimes or set(lifetimes) == {"ttl_30m_tokens", "ttl_12h_tokens"})
     )
     if complete:
         complete = bool(
@@ -147,11 +162,37 @@ def usage_evidence(raw, *, cache_lifetimes=False) -> tuple[dict, bool]:
             and known["cache_write_tokens"] <= known["input_tokens"]
             and known["cached_tokens"] + known["cache_write_tokens"] <= known["input_tokens"]
             and known["reasoning_tokens"] <= known["output_tokens"]
-            and (
-                not cache_lifetimes
-                or known["ttl_30m_tokens"] + known["ttl_12h_tokens"] == known["cache_write_tokens"]
-            )
         )
+    if cache_lifetimes:
+        names = {"ttl_30m_tokens", "ttl_12h_tokens"}
+        details_kind = _field_kind(inputs, "cache_write_tokens_details")
+        lifetimes = inputs.get("cache_write_tokens_details")
+        lifetimes = lifetimes if type(lifetimes) is dict else {}
+        for name in names:
+            value = lifetimes.get(name)
+            known[name] = value if type(value) is int and 0 <= value <= 10**9 else None
+        reported = (
+            set(lifetimes) == names
+            and all(known[name] is not None for name in names)
+            and sum(known[name] for name in names) == known["cache_write_tokens"]
+        )
+        derived = None
+        if (
+            complete
+            and allow_zero_allocation is True
+            and known["cache_write_tokens"] == 0
+            and details_kind in ("absent", "null")
+        ):
+            derived = dict.fromkeys(sorted(names), 0)
+        complete = complete and (reported or derived is not None)
+        known["cache_write_allocation"] = {
+            "aggregate_kind": _field_kind(inputs, "cache_write_tokens"),
+            "details_kind": details_kind,
+            "ttl_30m_kind": _field_kind(lifetimes, "ttl_30m_tokens"),
+            "ttl_12h_kind": _field_kind(lifetimes, "ttl_12h_tokens"),
+            "unknown_fields": bool(set(lifetimes) - names),
+            "derived_tokens": derived,
+        }
     return known, complete
 
 
@@ -291,19 +332,30 @@ class CallBudget:
 
     def observe(self, request_id: str, raw_usage, returned_tier, returned_model) -> bool:
         direct_luna = isinstance(self.limits.rates, LunaRates)
-        usage, complete = usage_evidence(raw_usage, cache_lifetimes=direct_luna)
-        # Unknown/malformed categories are retained without inventing zero usage.
-        rates = self.limits.rates
-        estimate = None
         identity_verified = (
             type(returned_tier) is str
             and returned_tier == self.limits.service_tier
             and type(returned_model) is str
             and returned_model == self.limits.model
         )
+        input_count = raw_usage.get("input_tokens") if type(raw_usage) is dict else None
+        usage, complete = usage_evidence(
+            raw_usage,
+            cache_lifetimes=direct_luna,
+            allow_zero_allocation=(
+                direct_luna
+                and identity_verified
+                and type(input_count) is int
+                and 0 <= input_count <= 272_000
+            ),
+        )
+        # Unknown observed fields remain None; derived zeros are separately labelled.
+        rates = self.limits.rates
+        estimate = None
         price_verified = not direct_luna or (complete and usage["input_tokens"] <= 272_000)
         if complete and identity_verified and price_verified and direct_luna:
-            estimate = rates.estimate(usage)
+            allocation = usage["cache_write_allocation"]["derived_tokens"] or {}
+            estimate = rates.estimate({**usage, **allocation})
         elif complete and identity_verified and price_verified:
             estimate = (
                 (usage["input_tokens"] - usage["cached_tokens"]) * rates.input_nano_usd

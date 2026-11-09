@@ -257,8 +257,14 @@ async def run_buyer(
     offline_x402 = type(session) is OfflineX402Buyer
     if offline_x402 and settings.mode != "offline":
         raise ValueError("The offline x402 buyer requires a scripted model; live mode is blocked")
-    if settings.mode == "live" and (not settings.model or model is not None):
-        raise ValueError("Live mode requires an explicit OpenAI model")
+    if settings.mode == "live":
+        if not settings.model:
+            raise ValueError("Live mode requires an explicit OpenAI model")
+        if model is not None:
+            from .pilot_transport import GuardedLunaModel
+
+            if type(model) is not GuardedLunaModel or not model.matches(session, goal, settings):
+                raise ValueError("Live mode requires an explicit OpenAI model")
     if settings.mode == "offline" and settings.model is not None:
         raise ValueError("Offline mode uses the scripted model")
     disable_export()
@@ -267,7 +273,7 @@ async def run_buyer(
     )
     constraints = boundary.catalog()  # Validates the existing operator grant before any model call.
     run_id = str(uuid4())
-    client = live_client(settings) if settings.mode == "live" else None
+    client = live_client(settings) if settings.mode == "live" and model is None else None
     selected = (
         OpenAIResponsesModel(model=settings.model, openai_client=client)
         if client

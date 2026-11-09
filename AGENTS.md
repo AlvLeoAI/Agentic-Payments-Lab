@@ -44,6 +44,16 @@ and embedded SQLite fix provenance must pass `require_pilot_runtime()`. The old
 creating fresh state; lower-level host objects and legacy APIs are not a global
 runtime sandbox. Never open retained state through initialization, enable live
 transport, load credentials or treat a planning ceiling as spending authorization.
+Phase 3B.8 adds an explicit simulator-only live transport, validated with
+in-memory HTTP under OS isolation. One separately authorized bounded pilot completed
+purchase, replay and refusal; this milestone authorizes no further live calls.
+Use its one immutable envelope for purchase,
+same-purchase replay and unaffordable refusal; never multiply/reset the whole-pilot
+USD 0.25/18-request ceiling per task or batch. Preserve the original stopped request's
+unresolved reservation; the successful pilot does not reprice or release it.
+Do not load credentials or make API requests during offline work. Preserve exact
+official endpoint/TLS, incremental response limits, no retries/proxies/redirects,
+unknown-usage and interrupted-owner fences, and the x402 live-model prohibition.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the isolated runtime with `python3 scripts/prepare_runtime.py`, then use

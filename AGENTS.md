@@ -54,6 +54,14 @@ unresolved reservation; the successful pilot does not reprice or release it.
 Do not load credentials or make API requests during offline work. Preserve exact
 official endpoint/TLS, incremental response limits, no retries/proxies/redirects,
 unknown-usage and interrupted-owner fences, and the x402 live-model prohibition.
+The local Streamlit pilot viewer is read-only. Its sole data source is a bounded,
+versioned, sanitized bundled JSON snapshot. Never read original databases or add
+execution, payment, reconciliation, credential, upload or live-call controls.
+Keep observed unknowns separate from derived values and scenario deltas separate
+from cumulative authority snapshots. Use the verified runtime and supported launcher
+with a clean child environment and temporary HOME/CWD/script configuration roots;
+preserve XSRF/CORS and disable telemetry. Localhost binding is not egress isolation.
+Test the viewer under OS network isolation without changing retained evidence.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the isolated runtime with `python3 scripts/prepare_runtime.py`, then use
@@ -63,6 +71,7 @@ unknown-usage and interrupted-owner fences, and the x402 live-model prohibition.
   and `uv run --offline --no-sync ruff format --check .`, selecting
   `UV_PROJECT_ENVIRONMENT=.runtime/venv`. Full runtime validation stays OS-isolated.
 - Run the credential-free demo with `uv run --offline --no-sync payments-lab demo`.
+- Launch the historical viewer with `.runtime/venv/bin/python -I -B scripts/view_pilot.py`.
 - Preserve integer atomic amounts, transactional budget reservations, immutable
   purchase identity, and the separation of payment and delivery states.
 - Never retry an uncertain payment. Reconcile the existing authorization.

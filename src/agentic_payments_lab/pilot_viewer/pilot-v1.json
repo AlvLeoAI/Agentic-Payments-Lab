@@ -1,0 +1,354 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "phase3b8-luna-2026-11-08",
+  "model": "gpt-6-luna",
+  "reasoning_effort": "none",
+  "requested_tier": "default",
+  "returned_tier": "default",
+  "billing_verified": false,
+  "provenance": {
+    "recorded_at_utc": "2026-11-08T21:34:45.215467+00:00",
+    "tested_base_commit": "4580e764cdac9925def8510be2e845c611de9af8",
+    "tested_manifest_sha256": "743b52895761a82009a693fe912acbba31356ab0f92e4e8cbcb810115a46a241",
+    "published_commit": "ddac023eaac8da578bda56cfb489c74992a74422",
+    "summary_sha256": "a1f85d7445bc92dda72e887cdc0073e0ef88d11088986aaa704213096d789527",
+    "purchase_sha256": "56f1699de7e10a35b797673b5978049b83f561e4805ddccecb320eea52b4e8be",
+    "replay_sha256": "85f40ef3f856ce194625e6707485154f4d59194c170d50a290a693c452efb673",
+    "refusal_sha256": "487194623cb83c90527c517f2186cccf871851cbb8f55a1d0651bbb31d8835d6"
+  },
+  "scenarios": [
+    {
+      "name": "purchase",
+      "termination": "completed",
+      "decision": "purchase_recorded",
+      "purchase_alias": "purchase-1",
+      "payment_state": "settled",
+      "delivery_state": "delivered",
+      "purchase_amount_atomic": 10000,
+      "grant_spent_atomic": 10000,
+      "grant_reserved_atomic": 0,
+      "authority_after": {
+        "executions": 1,
+        "authorizations": 1,
+        "charges": 1,
+        "charged_atomic": 10000
+      },
+      "requests": [
+        {
+          "ordinal": 1,
+          "usage": {
+            "input_tokens": 510,
+            "output_tokens": 15,
+            "total_tokens": 525,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 58500
+        },
+        {
+          "ordinal": 2,
+          "usage": {
+            "input_tokens": 613,
+            "output_tokens": 14,
+            "total_tokens": 627,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 68300
+        },
+        {
+          "ordinal": 3,
+          "usage": {
+            "input_tokens": 689,
+            "output_tokens": 20,
+            "total_tokens": 709,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 78900
+        },
+        {
+          "ordinal": 4,
+          "usage": {
+            "input_tokens": 779,
+            "output_tokens": 59,
+            "total_tokens": 838,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 107400
+        },
+        {
+          "ordinal": 5,
+          "usage": {
+            "input_tokens": 966,
+            "output_tokens": 46,
+            "total_tokens": 1012,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 119600
+        }
+      ],
+      "tool_trace": [
+        {
+          "attempt": 1,
+          "tool": "get_purchase_status",
+          "outcome": "ok"
+        },
+        {
+          "attempt": 2,
+          "tool": "list_services",
+          "outcome": "ok"
+        },
+        {
+          "attempt": 3,
+          "tool": "get_quote",
+          "outcome": "ok"
+        },
+        {
+          "attempt": 4,
+          "tool": "purchase",
+          "outcome": "ok"
+        }
+      ],
+      "usage": {
+        "input_tokens": 3557,
+        "output_tokens": 154,
+        "total_tokens": 3711,
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "reasoning_tokens": 0
+      },
+      "estimated_cost_nano_usd": 432700
+    },
+    {
+      "name": "replay",
+      "termination": "completed",
+      "decision": "purchase_recorded",
+      "purchase_alias": "purchase-1",
+      "payment_state": "settled",
+      "delivery_state": "delivered",
+      "purchase_amount_atomic": 10000,
+      "grant_spent_atomic": 10000,
+      "grant_reserved_atomic": 0,
+      "authority_after": {
+        "executions": 1,
+        "authorizations": 1,
+        "charges": 1,
+        "charged_atomic": 10000
+      },
+      "requests": [
+        {
+          "ordinal": 1,
+          "usage": {
+            "input_tokens": 494,
+            "output_tokens": 15,
+            "total_tokens": 509,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 56900
+        },
+        {
+          "ordinal": 2,
+          "usage": {
+            "input_tokens": 639,
+            "output_tokens": 30,
+            "total_tokens": 669,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 78900
+        }
+      ],
+      "tool_trace": [
+        {
+          "attempt": 1,
+          "tool": "get_purchase_status",
+          "outcome": "ok"
+        }
+      ],
+      "usage": {
+        "input_tokens": 1133,
+        "output_tokens": 45,
+        "total_tokens": 1178,
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "reasoning_tokens": 0
+      },
+      "estimated_cost_nano_usd": 135800
+    },
+    {
+      "name": "refusal",
+      "termination": "completed",
+      "decision": "no_suitable_service",
+      "purchase_alias": null,
+      "payment_state": "not_started",
+      "delivery_state": "not_requested",
+      "purchase_amount_atomic": null,
+      "grant_spent_atomic": 0,
+      "grant_reserved_atomic": 0,
+      "authority_after": {
+        "executions": 1,
+        "authorizations": 1,
+        "charges": 1,
+        "charged_atomic": 10000
+      },
+      "requests": [
+        {
+          "ordinal": 1,
+          "usage": {
+            "input_tokens": 493,
+            "output_tokens": 15,
+            "total_tokens": 508,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 56800
+        },
+        {
+          "ordinal": 2,
+          "usage": {
+            "input_tokens": 591,
+            "output_tokens": 14,
+            "total_tokens": 605,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 66100
+        },
+        {
+          "ordinal": 3,
+          "usage": {
+            "input_tokens": 650,
+            "output_tokens": 32,
+            "total_tokens": 682,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "cache_allocation": {
+            "details_kind": "absent",
+            "observed_ttl_30m_tokens": null,
+            "observed_ttl_12h_tokens": null,
+            "derived_ttl_30m_tokens": 0,
+            "derived_ttl_12h_tokens": 0
+          },
+          "estimated_cost_nano_usd": 81000
+        }
+      ],
+      "tool_trace": [
+        {
+          "attempt": 1,
+          "tool": "get_purchase_status",
+          "outcome": "ok"
+        },
+        {
+          "attempt": 2,
+          "tool": "list_services",
+          "outcome": "ok"
+        }
+      ],
+      "usage": {
+        "input_tokens": 1734,
+        "output_tokens": 61,
+        "total_tokens": 1795,
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "reasoning_tokens": 0
+      },
+      "estimated_cost_nano_usd": 203900
+    }
+  ],
+  "fresh_usage": {
+    "input_tokens": 6424,
+    "output_tokens": 260,
+    "total_tokens": 6684,
+    "cached_tokens": 0,
+    "cache_write_tokens": 0,
+    "reasoning_tokens": 0
+  },
+  "fresh_estimated_cost_nano_usd": 772400,
+  "fresh_unresolved_reservation_nano_usd": 0,
+  "original_stopped_attempt": {
+    "requests": 1,
+    "observed_input_tokens": 510,
+    "observed_output_tokens": 15,
+    "usage_complete": false,
+    "accepted_estimate_nano_usd": null,
+    "unresolved_reservation_nano_usd": 1239000
+  }
+}

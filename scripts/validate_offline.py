@@ -202,6 +202,15 @@ def validate(uv: str, parent_namespace: str) -> None:
             "--parent-netns",
             parent_namespace,
         )
+        run(
+            "run",
+            "--offline",
+            "--no-sync",
+            "python",
+            "scripts/check_pilot_viewer.py",
+            "--parent-netns",
+            parent_namespace,
+        )
 
 
 def main() -> None:

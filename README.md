@@ -123,6 +123,25 @@ The paid result is `settled` / `delivered`; the unauthorized result is `denied` 
 results without another charge. To run an independent demo, choose another
 directory with `payments-lab --state-dir /tmp/my-payment-demo demo`.
 
+## Historical pilot viewer
+
+The local read-only Streamlit page shows the saved Phase 3B.8 purchase, replay and
+refusal results. It reads one sanitized bundled snapshot, with separate payment
+and delivery states, per-scenario charge deltas and the original unresolved API
+reservation. It does not open the original databases or execute agent/payment work.
+
+After installing the verified runtime and locked dependencies described below:
+
+```bash
+.runtime/venv/bin/python -I -B scripts/view_pilot.py
+```
+
+Open `http://127.0.0.1:8501`; stop with Ctrl+C. The supported launcher isolates the
+child's environment and configuration, including script-adjacent Streamlit files.
+It binds only to loopback, preserves CORS/XSRF and disables telemetry. Loopback
+binding is not an OS egress sandbox. See [viewer data, launch and validation boundaries](docs/pilot-viewer.md).
+No credentials, uploads or execution controls are required or provided.
+
 ## Bounded buyer (Phase 2)
 
 The operator creates a grant/task before running the agent. The following commands
@@ -243,6 +262,11 @@ free, paid and unaffordable requests. It checks the payment authority's SQLite
 records directly for expected execution/charge counts. Caches and simulation
 data are kept in a temporary directory outside the repository. Isolation setup or
 verification failure stops validation; there is no unrestricted fallback.
+The viewer's AppTest cases also run in this suite. A final real-server smoke checks
+loopback binding, health/HTML serving, clean shutdown and that nine synthetic
+configuration/secret/environment files in the original discovery roots were never
+opened. That smoke enables loopback only inside the verified disposable namespace;
+it does not render JavaScript. Browser rendering is a separate local check.
 
 The suite covers authorization tampering, expiration, budget limits, forged receipts,
 delivery recovery, 100 simultaneous identical retries, 20 competing purchases,

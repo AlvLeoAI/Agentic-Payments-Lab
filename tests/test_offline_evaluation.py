@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import sqlite3
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -11,6 +12,7 @@ from call_budget_support import initialized, payload
 from test_call_budget import bound
 
 from agentic_payments_lab.buyer_agent.contracts import AgentReport
+from agentic_payments_lab.buyer_agent.eval_catalog import load_catalog
 from agentic_payments_lab.buyer_agent.evaluation import evaluate, score_case
 from agentic_payments_lab.buyer_agent.mock_responses import run_mock_buyer
 from agentic_payments_lab.buyer_agent.scripted import ScriptedBuyer
@@ -23,6 +25,17 @@ def test_evaluation_covers_unknown_replay_operator_delivery_and_incident(tmp_pat
     assert result["passed"], json.dumps(result, indent=2)
     assert result["model_behavior"] == "scripted_not_quality_evidence"
     cases = result["cases"]
+    catalog = load_catalog(Path(__file__).resolve().parents[1] / "evals/cases/offline-v1.jsonl")
+    # Bind documentation metadata to this existing execution, without another fixture/run.
+    for suite, emitted in (
+        ("offline_x402", cases),
+        ("responses_mock_over_simulator", result["wire"]["cases"]),
+    ):
+        declared = [case for case in catalog if case.suite == suite]
+        assert [case.case_id for case in declared] == [case["case"] for case in emitted]
+        for expected, actual in zip(declared, emitted, strict=True):
+            assert set(expected.expected_checks) == set(actual["checks"])
+            assert all(type(value) is bool for value in actual["checks"].values())
     assert [c["case"] for c in cases] == [
         "new_unknown",
         "replay_unknown",
@@ -43,6 +56,9 @@ def test_evaluation_covers_unknown_replay_operator_delivery_and_incident(tmp_pat
     assert result["wire"]["call_budget"]["blocked"]
     assert result["wire"]["call_budget"]["estimated_total_nano_usd"] is None
     assert all(c["observed"]["authority_charges"] == 1 for c in result["wire"]["cases"])
+    fixture_ids = {c["observed"]["purchase_id"] for c in cases}
+    wire_ids = {c["observed"]["purchase_id"] for c in result["wire"]["cases"]}
+    assert len(wire_ids) == 1 and fixture_ids.isdisjoint(wire_ids)
     with sqlite3.connect(root / "authority.sqlite3") as db:
         assert db.execute("SELECT count(*),sum(amount) FROM transfers").fetchone() == (1, 10_000)
     with sqlite3.connect(root / "agent.sqlite3") as db:

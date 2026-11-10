@@ -62,6 +62,22 @@ traces. A separate simulator suite exercises the pinned Responses wire path thro
 an in-memory transport, with complete serialized-body bounds and durable planning
 reservations. It makes no API calls and does not enable live models on the x402
 buyer. See [evaluation, accounting and remaining prerequisites](docs/phase3b6.md).
+The [versioned offline evaluation catalog](evals/README.md) maps its seven existing
+cases into two linked sequences and validates their metadata against actual evaluator
+check identifiers. The catalog describes coverage; it does not drive execution.
+
+A separate [bounded Luna simulator evaluation campaign](docs/luna-evaluation.md)
+freezes eight cases across three trials with one durable request/cost envelope.
+One separately authorized campaign completed all 24 entries on 2026-11-09
+(America/Argentina/Cordoba): 82 known complete Responses requests, estimated
+USD 0.0066626 (not verified billing), six new simulated charges and zero replay
+charges. It added no unresolved API reservation and preserved seeded unknown
+payment exposure. Deterministic safety/accounting checks passed; human explanation
+review remains pending. See the [sanitized baseline and four review examples](docs/luna-baseline.md).
+This exploratory sample does not establish general reliability or injection
+resistance. The historical USD 0.001239 unresolved API reservation and USD 0.0007724
+pilot estimate remain separate and unchanged. No further live calls or live models
+on x402 are authorized.
 
 **Phase 3B.7 prepares a guarded simulator pilot offline**, with a checksum-pinned
 Python 3.12.16 / SQLite 3.53.1 runtime, sourced Luna pricing and cache-write lifetime
@@ -278,7 +294,11 @@ checks but do not establish OS-level isolation. Likewise, `uv --offline` restric
 dependency access, not application networking.
 
 CI targets Ubuntu 24.04. The configuration installs the same checksum-pinned
-runtime and locked dependencies before isolation. It uses
+runtime and locked dependencies before isolation, with a 20-minute whole-job
+timeout. The timeout was increased to accommodate the expanded local validator
+and setup; no validation step or isolation check was removed. Hosted CI has not
+run for this uncommitted catalog/campaign/closure candidate. Local validation is
+not hosted proof. CI uses
 `sudo --non-interactive unshare --net` to run this same validator, including all test
 and demo subprocesses, in an isolated network namespace. CI requires passwordless
 sudo and network namespace support, avoiding reliance on unprivileged user namespace

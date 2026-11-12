@@ -250,30 +250,35 @@ sha256sum /tmp/payments-probe-adapter-offline-o3xymo_a/adapter-focused-ordered.l
 
 ### Offline test reproduction (WRITES temporary fixtures/logs; not read-only)
 
-These are reference commands for a separately authorized test run, NOT commands
-executed during handoff authoring or consistency review. Inspect the existing
-isolation launcher first. It uses the pinned runtime, a cleaned environment and
-an inherited new network namespace with loopback only. It must fail closed if
-isolation is unavailable. Do not substitute a merely offline dependency flag for
-network isolation, and never load `.env` or real credentials.
+Use the committed `scripts/validate_offline.py` with the Linux `unshare` procedure
+in [README validation instructions](../README.md#validation). The former temporary
+`isolated.py` launcher is unavailable and is not required or recreated. The clean
+environment below excludes inherited API keys and proxy configuration. The
+validator verifies the new loopback-only namespace and subprocess inheritance
+before running any checks. Isolation failure must stop execution; never substitute
+an offline dependency flag for network isolation or load `.env` or real credentials.
 
 ```bash
 cd /home/alvaro/Projects/Portfolio/Agentic-Payments-Lab
-TEST_TMP=$(mktemp -d /tmp/payments-handoff-tests-XXXXXXXX)
-python3 /tmp/payments-probe-adapter-offline-o3xymo_a/isolated.py   .runtime/venv/bin/python -B -m pytest -x -q   -o cache_dir="$TEST_TMP/cache" --basetemp="$TEST_TMP/fixtures"   tests/test_generation_probe.py tests/test_generation_probe_live.py
-# Only if focused tests pass and a full run is authorized:
-python3 /tmp/payments-probe-adapter-offline-o3xymo_a/isolated.py   .runtime/venv/bin/python -B scripts/validate_offline.py   --parent-netns "$(readlink /proc/self/ns/net)" --uv /home/alvaro/.local/bin/uv
+parent_netns=$(readlink /proc/self/ns/net)
+uv_executable=$(command -v uv)
+env -i HOME="$HOME" LANG="${LANG:-C.UTF-8}" PATH="$PATH" \
+  PYTHONDONTWRITEBYTECODE=1 \
+  unshare --user --map-root-user --net -- \
+  .runtime/venv/bin/python -B scripts/validate_offline.py \
+  --parent-netns "$parent_netns" --uv "$uv_executable"
 ```
 
 These commands write new temporary databases and caches; they do not initialize
 or open historical retained authorities. No live execution command is supplied
-or represented as authorized. If the temporary launcher/evidence is unavailable,
-stop and re-establish the documented isolated setup rather than bypass it.
+or represented as authorized. If the pinned runtime, dependencies or namespace
+support are unavailable, stop rather than bypass isolation. The validator manages
+temporary fixtures and caches outside the repository; retain its output separately.
 
 ## Recommended next action
 
 Complete only the five authorized maintenance tasks before November 17: correct
-status, retain the isolation launcher in `scripts/`, preserve sanitized evidence,
+status, use the committed validator's isolation procedure, preserve sanitized evidence,
 fix the LOW editorial finding and add a short "Start here" section. Keep each task
 in its own commit, then stop. Do not change adapter code or prepare a live probe.
 Keep the remaining ranked findings and execution prerequisites visible. The

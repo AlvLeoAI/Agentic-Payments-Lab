@@ -62,6 +62,26 @@ from cumulative authority snapshots. Use the verified runtime and supported laun
 with a clean child environment and temporary HOME/CWD/script configuration roots;
 preserve XSRF/CORS and disable telemetry. Localhost binding is not egress isolation.
 Test the viewer under OS network isolation without changing retained evidence.
+The paired Luna/Haiku comparison defaults to offline preparation. Its native
+Messages/official Responses paths share the unchanged
+four-tool simulator boundary and one durable owner/stop/schedule journal, and
+retain independent arm and aggregate limits. Full-request count witnesses are
+separate from generation reservations; conditional context backstops are not vendor
+billing guarantees. A separate guarded transport requires explicit source/policy
+review and fresh enrollment. Only separately authorized non-generating preflight
+may use transient provider-specific keys: one model read and two count probes per
+provider, zero retries, no fallback or resume. Count/model access does not authorize
+generation or verify account billing. Generation needs separate operator approval,
+completed preflight evidence and reviewed pricing/backstop assumptions. Never load
+credentials during offline validation. Preserve historical campaigns/evidence,
+human-pending judgments and the viewer. No budget transfer or live x402 activation.
+See docs/paired-evaluation.md and docs/paired-preflight.md before comparison edits.
+Preflight diagnostics use fresh version-2 journals only. Retain bounded fixed
+failure codes and observed stage/status, never raw error text, bodies, headers or
+credentials. Preserve the stopped version-1 preflight byte-for-byte; do not migrate,
+resume, backfill diagnostics or infer its cause. Missing diagnostic writes remain
+unknown. Completion requires a durable acknowledgment after finalization returned;
+that boundary does not prove later reporting or cleanup was error-free.
 
 - Use Python 3.12, uv, Pydantic, SQLite, FastAPI, HTTPX, and pytest.
 - Install the isolated runtime with `python3 scripts/prepare_runtime.py`, then use
@@ -94,3 +114,23 @@ Test the viewer under OS network isolation without changing retained evidence.
   observations/cached delivery cannot settle buyer accounting. Retrieval and explicit
   deterministic cache recovery are non-charging and stay inside trusted ASGI/host code.
 - Do not commit secrets or runtime databases. Do not commit or push without user approval.
+
+Generation compatibility preparation remains mock-only in `generation_probe.py`.
+The two-provider rehearsal never calls buyer tools and has no live adapter/key
+input. Its shared authority requires hash-bound prior estimated spend/exposure,
+allocates once, and does not reset the existing USD 3/USD 1.50-per-arm envelope.
+Keep missing inventory/account-pricing attestations explicit. Step 2 reserves counted input plus an explicit assumed overhead margin, times
+placeholder input price, plus one output cap (including reasoning/thinking) times
+placeholder output price. Context allowance is only an uncounted fallback. No
+context reservation floor applies to counted requests. Estimates are not billing caps.
+See docs/generation-compatibility.md; no authenticated generation is authorized.
+
+The separately prepared `generation_probe_live.py` adapter is not authorized to
+execute by preparation, documentation, testing or commit approval. Its four-POST
+scope has no tool execution/retries/continuation. Use explicit user-reported short
+rates, never placeholder fallback, and reject unsupported cache/mode/rate regimes.
+The strict quality gate stops before the next provider on refusal/truncation or
+invalid output without undoing accepted accounting. Development uses synthetic
+keys and OS isolation. Preserve old authorities/evidence and require separate
+execution approval, current source/body review and carried prior exposure.
+See docs/generation-live-adapter.md for limits and remaining uncertainties.

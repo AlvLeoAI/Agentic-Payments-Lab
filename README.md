@@ -13,6 +13,13 @@ private keys, blockchain RPCs, payment facilitators, or live x402 integrations.
 `SIM-USDC` uses six decimal places for arithmetic exercises; it
 is not USDC and has no monetary value. Simulator tasks use `simulation:local`.
 
+The [paired Luna/Haiku evaluation](docs/paired-evaluation.md) is a separate
+preparation candidate: shared simulator authority, native HTTP mocks, matched
+48-episode schedule and durable count/reservation accounting. A separately guarded
+[non-generating preflight](docs/paired-preflight.md) does not authorize comparison
+generation. No live comparison results are claimed; historical pilot evidence and
+the read-only viewer stay unchanged.
+
 **Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
 signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
 USDC identifiers describe protocol fixtures; it cannot sign or send a payment.

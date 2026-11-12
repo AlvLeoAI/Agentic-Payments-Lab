@@ -193,7 +193,7 @@ baseline; line references refer to that commit, not future edits.
 
 Code references without a prefix above are under `src/agentic_payments_lab/`.
 
-### Ranked findings and open decisions (not fixed)
+### Ranked findings and current disposition
 
 - **HIGH for future production/distributed use:** independent database
   loss/rollback breaks dedup assumptions; real-provider cancellation/finality is
@@ -203,11 +203,11 @@ Code references without a prefix above are under `src/agentic_payments_lab/`.
 - **LOW concrete observability issue:** statistics read can combine snapshots.
   Decide whether a later separately scoped change should wrap it in one read
   transaction. This handoff does not implement a fix.
-- **LOW editorial:** `docs/paired-evaluation.md:3` still says “uncommitted” and
-  lines 45–46 broadly deny automatic continuation, while the full paired runner
-  has bounded tool-result turns (`buyer_agent/comparison_runner.py:310–343`).
-  The minimal adapter genuinely has none. These were nonblocking review findings;
-  the consistency review made no documentation changes.
+- **LOW editorial — corrected in this maintenance:** `docs/paired-evaluation.md`
+  now states that the preparation is committed and distinguishes the full paired
+  runner's bounded tool-result turns from the minimal adapter's lack of follow-up
+  turns. This corrects the two nonblocking prose findings; implementation is
+  unchanged. The original consistency review itself made no documentation changes.
 
 Open before any live probe: explicit execution approval; complete prior-inventory
 reconciliation; chosen shared authority identity/path; current source and body

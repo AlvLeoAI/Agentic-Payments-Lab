@@ -1,6 +1,6 @@
 # Luna / Haiku paired evaluation — guarded preparation
 
-This is an uncommitted engineering candidate, not a live comparison result.
+This committed engineering preparation does not report a live comparison result.
 Ordinary execution and validation use in-memory mocks. The separate
 [preflight contract](paired-preflight.md) bounds any explicitly approved model
 access/count probes and keeps generation behind a further review. Real payments,
@@ -42,8 +42,11 @@ failure stops both arms and leaves remaining slots unattempted.
 The aggregate ceilings are 288 generations, 288 separate count attempts and USD
 3.00. Full serialized count and generation bodies are independently bounded to
 32,768 bytes; generation responses to 65,536 bytes, count responses to 4,096.
-No retries, fallbacks, selective replacement, automatic continuation, reset or
-resume are implemented. These thinking settings do not imply equal internal work.
+The paired runner supports bounded tool-result continuation within each episode,
+up to six generations and eight tool attempts. No retries, fallbacks, selective
+replacement, reset or resume of an interrupted run are implemented. The separate
+minimal generation-compatibility adapter executes no tools or follow-up turns.
+These thinking settings do not imply equal internal work.
 
 Both arms receive the unchanged buyer instructions and the same eligibility-filtered
 catalog, including its generic refusal reason. Neither sees hidden global prices

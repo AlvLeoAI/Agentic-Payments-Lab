@@ -27,27 +27,34 @@ adapter-preparation work.
 
 ## Verified and not verified
 
-Verified offline on the adapter code: 61 focused tests passed in 46.44 seconds;
-full validation passed 1,449 tests in 1,606.15 seconds, exit 0. Dependency checks,
-Ruff lint/format, repeated simulator demos, evaluator and isolated viewer-server
-checks passed. OS network isolation was verified, including subprocess inheritance;
-synthetic credentials and mock HTTP exercised the adapter. Browser rendering was
-not tested by the validator. Three adapter-related docs changed after the full
-suite; tested code/tests were byte-identical at commit. This handoff adds prose
-only and has not triggered another suite run.
+Historical reports stated that 61 focused tests passed in 46.44 seconds and
+1,449 full-suite tests passed in 1,606.15 seconds. Those original logs are now
+lost and their recorded hashes cannot be verified. Their reported results remain
+historical claims, separate from the fresh evidence below.
 
-Verified preservation before commit: 46,135 historical evidence entries plus 2,882
-entries from previous offline/review artifacts were unchanged. All 162 pre-adapter
-source files, including 66 tests, were copied before adapter edits. Older stopped
-journals and the original unresolved reservation were not migrated, retried,
-reconciled or released. Commit scope and credential/runtime exclusions were checked.
+Fresh local validation on 2026-11-12 at
+`6a374a1a9e00168564391b22f674241076dd9247`: **1,449 tests passed in 1,722.54
+seconds**; the full validator exited 0 in 1,770 seconds overall. Lockfile checks,
+Ruff lint/format, repeated authority-checked simulator/agent demos, four evaluator
+cases and the viewer-server check passed. OS network isolation and subprocess
+inheritance were verified. Only synthetic test credentials and mock provider HTTP
+were used; no real credentials or external network. Browser rendering and hosted
+CI were not tested. All 171 tracked files matched the source snapshot before and
+after the run; later maintenance edits are documentation only.
+
+Historical precommit reports also claimed preservation of 46,135 historical entries,
+2,882 previous offline/review entries and 162 pre-adapter source files, including
+66 tests. The supporting logs and copies are unavailable, so that preservation
+cannot be reverified. This maintenance did not open or alter retained authorities,
+retry stopped operations, reconcile or release exposure.
 
 Not verified: authenticated compatibility of this new adapter, actual account
 pricing/invoice deductions, full account inventory, provider enforcement/overshoot,
 credit applicability/expiry, real payment settlement/finality, power-loss durability,
 independent backup restore, multi-host safety or any guaranteed cost ceiling.
 Historical model/count access does not establish those facts. Earlier interrupted
-tests are not passes; the final ordered focused/full runs above are the evidence.
+tests are not passes. The fresh run does not recover the lost logs or re-establish
+historical provider access, account usage or preservation claims.
 
 ## Adapter contract, pricing and actual behavior
 
@@ -211,30 +218,50 @@ No fresh real authority or credential loading is needed to finish this handoff.
 
 ## Evidence and reproducible inspection
 
-Local evidence is outside Git and may be ephemeral. Do not delete, migrate, open
-old DBs through initialization, or overwrite stopped records. Arrange an authorized
-transfer/retention of useful sanitized evidence before access ends; no such transfer
-is performed by this document.
+Durable local evidence is outside Git at:
+`/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-12-handoff-maintenance/`.
+Do not delete, migrate, initialize old databases or overwrite stopped records.
 
-Current adapter evidence directory:
-`/tmp/payments-probe-adapter-offline-o3xymo_a/`
+### Lost historical evidence — recorded hashes are unverifiable
 
-- `adapter-focused-ordered.log`: 61 passed; SHA-256
+The named `/tmp` directories are absent. Searches of `/tmp`, `/var/tmp` and
+readable home-directory locations found no surviving copies of the named artifacts.
+Search scope and inaccessible system-private directories are recorded in
+`evidence-search.json` and `home-evidence-search*`. No original execution logs were
+copied or hash-verified. These recorded hashes are retained only for traceability:
+
+- `/tmp/payments-probe-adapter-offline-o3xymo_a/adapter-focused-ordered.log`:
+  **lost; recorded SHA-256 unverifiable**
   `1203c6b4fb59d4b23410f25b6c3d64f22a160c1d368f951534d0beff5d85a8f9`.
-- `full-validator-ordered.log`: 1,449 passed; SHA-256
+- `/tmp/payments-probe-adapter-offline-o3xymo_a/full-validator-ordered.log`:
+  **lost; recorded SHA-256 unverifiable**
   `4000c6d2731281cbe156dff353fe1858359d280b0e1efc3cce3ec15ac2b8f13b`.
-- Both corresponding `.exit` files are 0. `commit-ordered.log/.exit` records the
-  28-file commit. `precommit-historical.log` and `precommit-source-artifacts.log`
-  record preservation and unchanged tested code. `before/` and
-  `before-source-manifest.json` preserve all pre-adapter source/test files.
-- Historical exact-body packet: `/tmp/payments-live-probe-review-6c8584jp/REVIEW.md`,
-  SHA-256 `c91257e182243de2a91b221151f37bfc028d7af9d4421f35a2be8c7a24dc88b1`.
-  Its JSON bodies remain useful references; its mock/PLACEHOLDER implementation
-  status is historical. Use the committed adapter policy above for current rates
-  and strict gate, not that packet's old policy prose.
-- Earlier non-generating diagnostic:
-  `/tmp/payments-endpoint-diagnostic-4_d266j_/FINAL-SUMMARY.json`. Six verified
-  responses, zero generation attempts; count/model access is not billing identity.
+- The associated `.exit` files, `commit-ordered.log/.exit`,
+  `precommit-historical.log`, `precommit-source-artifacts.log`, `before/` and
+  `before-source-manifest.json` are also missing; their previous claims cannot
+  be rechecked against those artifacts.
+- `/tmp/payments-live-probe-review-6c8584jp/REVIEW.md`:
+  **lost; recorded SHA-256 unverifiable**
+  `c91257e182243de2a91b221151f37bfc028d7af9d4421f35a2be8c7a24dc88b1`.
+  Its historical body packet is unavailable and was not recreated.
+- `/tmp/payments-endpoint-diagnostic-4_d266j_/FINAL-SUMMARY.json`: **lost**;
+  no hash was recorded here. The previously reported six verified responses and
+  zero generation attempts cannot be reverified from the missing summary.
+
+### Fresh evidence — not a replacement for the original records
+
+- `full-validator.log`: the single fresh run described above; SHA-256
+  `384fa5a419d0337586ce37859b9b8b1dd10b11f5dc88b8a9df1cceecb5f1ec1b`.
+- `full-validator.exit`: 0. `fresh-validation.json` records observed results;
+  `validation-provenance.json`, `validation-command.txt`, UTC start/finish files
+  and `tracked-content-before-validation.json` identify the command and inputs.
+- `historical-handoff-28bfe29.md` is a surviving committed report copied from Git
+  with byte-for-byte SHA-256 verification. It is not an original execution log.
+- `evidence-inventory.json` distinguishes the missing originals from the surviving
+  document. `SHA256SUMS` verifies the retained files in this dated directory.
+
+Fresh passing tests do not validate the lost historical logs or authorize a live
+probe. No real credentials, wallets, real payments or live-probe preparation were used.
 
 ### Read-only inspection examples (no tests or provider access)
 
@@ -244,8 +271,9 @@ git status --short
 git branch --show-current
 git show --stat --oneline e3944fa9f0202c0099f1a06b09038a67b9f3a61e
 git show e3944fa9f0202c0099f1a06b09038a67b9f3a61e:src/agentic_payments_lab/buyer_agent/generation_probe_live.py
-grep -E '[0-9]+ passed' /tmp/payments-probe-adapter-offline-o3xymo_a/adapter-focused-ordered.log /tmp/payments-probe-adapter-offline-o3xymo_a/full-validator-ordered.log
-sha256sum /tmp/payments-probe-adapter-offline-o3xymo_a/adapter-focused-ordered.log /tmp/payments-probe-adapter-offline-o3xymo_a/full-validator-ordered.log
+handoff_evidence=/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-12-handoff-maintenance
+rg '[0-9]+ passed' "$handoff_evidence/full-validator.log"
+(cd "$handoff_evidence" && sha256sum --check SHA256SUMS)
 ```
 
 ### Offline test reproduction (WRITES temporary fixtures/logs; not read-only)

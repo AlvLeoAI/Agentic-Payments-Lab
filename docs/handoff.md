@@ -1,5 +1,13 @@
 # Agentic Payments Lab handoff
 
+## Start here
+
+- Read the [current status and scope](#current-phase-and-priority).
+- Distinguish [fresh evidence from lost historical records](#evidence-and-reproducible-inspection).
+- Use the [offline reproduction procedure](#offline-test-reproduction-writes-temporary-fixtureslogs-not-read-only) only for an authorized run.
+- Review the [remaining findings and editorial correction](#ranked-findings-and-current-disposition).
+- Stop after the scoped maintenance: no live probe, real payments or deployment.
+
 Updated 2026-11-12. This is a separately authorized handoff document, written
 AFTER the completed read-only consistency review. It does not amend that review,
 change code or authorize execution. The original handoff was committed and pushed

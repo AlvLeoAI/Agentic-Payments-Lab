@@ -4,9 +4,12 @@
 
 - Read the [current status and scope](#current-phase-and-priority).
 - Distinguish [fresh evidence from lost historical records](#evidence-and-reproducible-inspection).
-- Use the [offline reproduction procedure](#offline-test-reproduction-writes-temporary-fixtureslogs-not-read-only) only for an authorized run.
+- Use the [offline reproduction procedure](#offline-test-reproduction-writes-temporary-fixtureslogs-not-read-only) only for an authorized run:
+  ask the user in chat before each run, offline pytest included (~30 min, writes temporary fixtures).
 - Review the [remaining findings and editorial correction](#ranked-findings-and-current-disposition).
 - Stop after the scoped maintenance: no live probe, real payments or deployment.
+  "Stop" means: make no further commits or changes outside a task the user gives in
+  chat. Claude Code sessions also load the hard rules in the repository-root `CLAUDE.md`.
 
 Updated 2026-11-12. This is a separately authorized handoff document, written
 AFTER the completed read-only consistency review. It does not amend that review,
@@ -29,8 +32,23 @@ adapter-preparation work.
 - Exactly 28 approved source/test/documentation files; no runtime databases or
   evidence directories committed. The adapter and original handoff are included
   in the published branch at `28bfe29`; later maintenance commits are separate.
-- Complete the five authorized maintenance tasks before November 17, 2026, each
-  in its own commit, then stop. Access ends November 19, 2026. These dates do not
+- Git file counts: 144 tracked files before the adapter (`e3944fa^`), plus 26
+  added and 2 modified by the adapter commit = 170, plus `docs/handoff.md` = 171.
+  The historical "162 pre-adapter source files" claim below does not match Git's
+  144 and cannot be rechecked; treat it as unverified.
+- **All five maintenance tasks are done**, one commit each: `e2edfd9` (status),
+  `6a374a1` (validator procedure), `799b4f6` (evidence), `419bda6` (editorial
+  finding), `6f275ab` (Start here). The local
+  `origin/payments/bounded-generation-adapter-offline` ref showed `6f275ab` on
+  2026-11-12. After the five tasks, a separately requested Claude Code onboarding
+  pass added `CLAUDE.md` and `.claude/settings.json` and closed cold-start gaps in
+  this file. It is not one of the five tasks, and it is committed only if `git log`
+  shows it. Do not infer HEAD from this document: run `git status -sb` and
+  `git log -3`. `git diff --stat 6a374a1..6f275ab` touches only `docs/handoff.md`
+  and `docs/paired-evaluation.md`, which supports the documentation-only claim.
+- The maintenance window was: finish the five tasks before November 17, 2026, each
+  in its own commit, then stop. The user's Codex/OpenAI subscription access ends
+  around November 19, 2026; the repository and evidence directory remain. These dates do not
   authorize a probe, waive prerequisites, or imply a scheduled reminder.
 
 ## Verified and not verified
@@ -115,7 +133,8 @@ incident.
 
 ### Shared exposure and account-control provenance
 
-Keep the existing $3 aggregate/$1.50-per-provider authorization, one agreed local
+Keep the existing $3 aggregate/$1.50-per-provider authorization (AGENTS.md's
+"per-arm"; each arm is one provider), one agreed local
 authority path/identity, one-shot allocation and exclusive initialization. Live
 schema 3 and mock schema 2 are separate; no old journal migration/reset is allowed.
 The minimum locally documented prior carry is $0.0098583, ALREADY including the
@@ -157,8 +176,10 @@ cannot restart; no automatic reconciliation or recovery is provided.
 
 Conclusion: no new financial-safety defect found within the documented intact,
 same-host SQLite simulator assumptions. The review changed no files and ran no
-new tests; it used the saved 1,449-test result. Paths below are relative to the
-baseline; line references refer to that commit, not future edits.
+new tests; it used the then-saved 1,449-test result, whose log is now lost (the
+fresh 2026-11-12 run reproduces the count but is a different record). Paths below
+are relative to the adapter baseline `e3944fa`; `28bfe29` added only
+`docs/handoff.md`, so source line references are identical at both commits.
 
 1. **Transaction boundaries / atomicity.** Ledger reserve/claim/audit are local
    transactions (`ledger.py:224–380`); payment-authority execution/result and
@@ -209,8 +230,8 @@ Code references without a prefix above are under `src/agentic_payments_lab/`.
 - **MEDIUM operational:** unknown holds can remain indefinitely; decide explicit
   operator reconciliation/escalation procedures before a production deployment.
 - **LOW concrete observability issue:** statistics read can combine snapshots.
-  Decide whether a later separately scoped change should wrap it in one read
-  transaction. This handoff does not implement a fix.
+  The user decides whether a later separately scoped change should wrap it in
+  one read transaction. This handoff does not implement a fix.
 - **LOW editorial — corrected in this maintenance:** `docs/paired-evaluation.md`
   now states that the preparation is committed and distinguishes the full paired
   runner's bounded tool-result turns from the minimal adapter's lack of follow-up
@@ -220,8 +241,15 @@ Code references without a prefix above are under `src/agentic_payments_lab/`.
 Open before any live probe: explicit execution approval; complete prior-inventory
 reconciliation; chosen shared authority identity/path; current source and body
 hash review; preflight-lineage acceptance; reported-rate/margin acceptance;
-uncached-mode residual-risk acceptance or resolution of missing pricing/control.
+uncached-mode residual-risk acceptance or resolution of missing pricing/control;
+the SQLite WAL-reset prerequisite. It is satisfied only by the pinned `.runtime/`
+interpreter ([phase3b7](phase3b7.md)). The old `.venv` and system SQLite remain
+unpatched, and other runtimes are not accepted
+([phase3b1](phase3b1.md#sqlite-prerequisite--live-use-blocked)).
 Code review fields are trusted operator assertions, not proof of user consent.
+These terms (authority identity/path, preflight lineage, review fields, arms) are
+defined in [generation-live-adapter.md](generation-live-adapter.md) and
+[generation-compatibility.md](generation-compatibility.md).
 No fresh real authority or credential loading is needed to finish this handoff.
 
 ## Evidence and reproducible inspection
@@ -229,6 +257,9 @@ No fresh real authority or credential loading is needed to finish this handoff.
 Durable local evidence is outside Git at:
 `/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-12-handoff-maintenance/`.
 Do not delete, migrate, initialize old databases or overwrite stopped records.
+Read-only inspection of this directory (the commands below) is allowed.
+`sha256sum --check SHA256SUMS` was re-run on 2026-11-12 after maintenance: all 15
+listed files OK, exit 0.
 
 ### Lost historical evidence — recorded hashes are unverifiable
 
@@ -309,13 +340,20 @@ These commands write new temporary databases and caches; they do not initialize
 or open historical retained authorities. No live execution command is supplied
 or represented as authorized. If the pinned runtime, dependencies or namespace
 support are unavailable, stop rather than bypass isolation. The validator manages
-temporary fixtures and caches outside the repository; retain its output separately.
+temporary fixtures and caches outside the repository. Retain its output in a new
+dated directory under `/home/alvaro/lab-evidence/agentic-payments-lab/`, never in
+the existing read-only one.
+The validator sets `UV_PROJECT_ENVIRONMENT` to its own interpreter prefix
+(`.runtime/venv`), so the `env -i` command above does not need to pass it.
 
 ## Recommended next action
 
-Complete only the five authorized maintenance tasks before November 17: correct
-status, use the committed validator's isolation procedure, preserve sanitized evidence,
-fix the LOW editorial finding and add a short "Start here" section. Keep each task
-in its own commit, then stop. Do not change adapter code or prepare a live probe.
-Keep the remaining ranked findings and execution prerequisites visible. The
-deadline does not authorize credential loading, exposure resets or live execution.
+The five maintenance tasks are complete (see [current phase](#current-phase-and-priority)).
+There is no authorized next task. Wait for the user. Do not change adapter code
+or prepare a live probe. Keep the remaining ranked findings and execution
+prerequisites visible. No date authorizes credential loading, exposure resets or
+live execution.
+
+Open decision for the user: `main` still describes Phase 2, and all of this work
+is on `payments/bounded-generation-adapter-offline`. Whether to merge it through a
+reviewed pull request is undecided. Do not open or merge one without approval.

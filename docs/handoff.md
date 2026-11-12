@@ -2,23 +2,27 @@
 
 Updated 2026-11-12. This is a separately authorized handoff document, written
 AFTER the completed read-only consistency review. It does not amend that review,
-change code or authorize execution. This document is not yet committed.
+change code or authorize execution. The original handoff was committed and pushed
+as `28bfe29f87386ea51af2e7ae82090db6559fca32`. The worktree was clean at the start
+of this maintenance pass.
 
 ## Current phase and priority
 
 The bounded generation adapter and its prerequisites are prepared, independently
-reviewed and locally committed. The subsequent architectural consistency review
-was read-only and reported findings without fixes. **No new live generation or
+reviewed, committed and pushed on the branch below. The subsequent architectural
+consistency review was read-only and reported findings without fixes. **No new live generation or
 payment is authorized.** Earlier historical live usage is distinct from this
 adapter-preparation work.
 
-- Baseline: `e3944fa9f0202c0099f1a06b09038a67b9f3a61e`.
+- Adapter review baseline: `e3944fa9f0202c0099f1a06b09038a67b9f3a61e`.
+- Published handoff baseline: `28bfe29f87386ea51af2e7ae82090db6559fca32`.
 - Branch: `payments/bounded-generation-adapter-offline`.
 - Commit: `Prepare bounded generation probe with counted reservations and offline safeguards`.
 - Exactly 28 approved source/test/documentation files; no runtime databases or
-  evidence directories committed, no push. Worktree was clean before this handoff.
-- Handoff completion has priority independent of any live approval. Planning
-  deadline: November 18, 2026; access ends November 19, 2026. These dates do not
+  evidence directories committed. The adapter and original handoff are included
+  in the published branch at `28bfe29`; later maintenance commits are separate.
+- Complete the five authorized maintenance tasks before November 17, 2026, each
+  in its own commit, then stop. Access ends November 19, 2026. These dates do not
   authorize a probe, waive prerequisites, or imply a scheduled reminder.
 
 ## Verified and not verified
@@ -268,9 +272,9 @@ stop and re-establish the documented isolated setup rather than bypass it.
 
 ## Recommended next action
 
-Finish independent accuracy review and delivery of this handoff before November 18,
-regardless of live approval. Preserve access to the committed branch and arrange
-sanitized evidence retention before November 19. Keep the ranked findings and
-execution prerequisites visible. Do not let the deadline become a reason to skip
-review, reset exposure, use real credentials or run a probe. Any live work or later
-fix/commit of this handoff needs its own clearly scoped authorization.
+Complete only the five authorized maintenance tasks before November 17: correct
+status, retain the isolation launcher in `scripts/`, preserve sanitized evidence,
+fix the LOW editorial finding and add a short "Start here" section. Keep each task
+in its own commit, then stop. Do not change adapter code or prepare a live probe.
+Keep the remaining ranked findings and execution prerequisites visible. The
+deadline does not authorize credential loading, exposure resets or live execution.

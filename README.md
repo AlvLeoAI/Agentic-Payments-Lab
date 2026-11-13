@@ -1,113 +1,75 @@
 # Agentic Payments Lab
 
-A deterministic procurement simulator that separates purchase decisions,
-financial authorization, payment execution, and resource delivery.
+A deterministic procurement simulator for AI buyer agents. It separates purchase
+decisions, financial authorization, payment execution, and resource delivery, so a
+model can choose what to buy but cannot create budget, retry an uncertain payment
+or settle its own accounting.
 
-**Phase 1 is accepted; Phase 2 adds a bounded OpenAI SDK buyer. All payments and
-receipts remain simulated.** The buyer defaults to a credential-free scripted
-model through the actual SDK runner. Explicit live Responses acceptance checks passed
-for free acquisition, simulated paid acquisition, replay, and unaffordable refusal.
-These are bounded integration checks, not evidence of general model reliability.
-There are no wallets,
+**All payments and receipts are simulated.** There are no wallets,
 private keys, blockchain RPCs, payment facilitators, or live x402 integrations.
 `SIM-USDC` uses six decimal places for arithmetic exercises; it
 is not USDC and has no monetary value. Simulator tasks use `simulation:local`.
 
-The [paired Luna/Haiku evaluation](docs/paired-evaluation.md) is a separate
-preparation candidate: shared simulator authority, native HTTP mocks, matched
-48-episode schedule and durable count/reservation accounting. A separately guarded
-[non-generating preflight](docs/paired-preflight.md) does not authorize comparison
-generation. No live comparison results are claimed; historical pilot evidence and
-the read-only viewer stay unchanged.
+## Current state
 
-**Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
-signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
-USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
-The original slice is separate from the agent/CLI. See [scope, evidence and recovery](docs/phase3b1.md),
-including the unresolved SQLite WAL-reset patch prerequisite for live use.
+As of 2026-11-13:
 
-**Phase 3B.2 adds offline merchant integration** through FastAPI and HTTPX ASGI:
-explicit host enrollment, the required payment-identifier extension, durable
-request/nonce binding, one settlement-double invocation per committed claim, and
-non-charging cached retrieval. Pending or interrupted attempts never retry settlement.
-Merchant-reported success does not settle buyer accounting. There is no agent/CLI
-backend switch, real signer or facilitator connection. See the
-[offline merchant contract and failure matrix](docs/phase3b2.md).
+- **Simulator core.** Operator grants, transactional budget reservations and
+  append-only audit in SQLite, with payment and delivery tracked as separate states.
+  Unknown outcomes stay reserved until explicitly reconciled; nothing is retried.
+- **Bounded buyer agent.** The official Python Agents SDK with Responses and four
+  narrow tools. It defaults to a credential-free scripted model through the actual
+  SDK runner.
+- **Offline x402 path.** Validation gate, ASGI merchant, evidence reconciliation
+  and delivery acceptance, exercised only with signer, dispatcher and settlement
+  doubles. It cannot sign or send a payment.
+- **Guarded live-model runs on the simulator.** Separately authorized runs with a
+  real model and simulated payments, including a three-scenario pilot and a
+  24-entry evaluation campaign. Cost figures are estimates, not verified billing,
+  and no further live calls are authorized.
+- **Paired Luna/Haiku comparison and bounded generation adapter.** The most recent
+  work, prepared offline. No comparison generation has been run against a
+  provider, and no live comparison results are claimed.
+- **Verification.** A local run of the network-isolated validator passed 1,454
+  tests at `cb91e9c`. CI runs the same validator on every push. What is and is
+  not verified, the open findings and the prerequisites for any live run are in
+  the [handoff](docs/handoff.md).
 
-**Phase 3B.3 adds offline evidence validation and explicit reconciliation** over
-bounded synthetic public records. Matching finalized fixture receipts/events or
-post-expiry non-use can resolve the original buyer reservation exactly once.
-Missing, malformed or provisional evidence stays inconclusive; a contradiction
-after accepted finality records an operator incident without reversing accounting.
-This is a fixture-only Python operator API, with no RPC client, real proof, startup
-worker or agent/CLI integration. See [evidence, recovery and limits](docs/phase3b3.md).
+## What it demonstrates
 
-**Phase 3B.4 adds explicit offline buyer delivery acceptance** for an already
-fixture-settled purchase. A non-charging ASGI retrieval validates the original
-request, purchase identity and deterministic content before recording one durable
-acceptance in the buyer audit. Repeated calls, concurrent callers and restarts
-cannot duplicate acceptance or execute another payment. Delivery failure preserves
-settled accounting; finality incidents fence new acceptance. This milestone is
-published at `2fce3e6`. See [delivery acceptance and limits](docs/phase3b4.md).
+- **Authority stays outside the model.** Task, subject, purpose and quality are
+  bound outside model arguments. The model only sees narrow tools with strict schemas.
+- **Uncertain payments are never retried.** The existing authorization is
+  reconciled instead, and exposure is held until there is conclusive evidence.
+- **API spend is reserved before it is sent.** Each model request commits a durable
+  reservation first. Unknown usage keeps the reservation and stops the run.
+- **Credentials stay transient.** Offline work uses synthetic keys under OS network
+  isolation, and responses are checked for credential reflection before retention.
+- **Claims are separated from evidence.** Simulated receipts are not blockchain
+  evidence, estimates are not billing, and lost records are marked as unverifiable.
 
-**Phase 3B.5 connects the bounded buyer to offline x402 fixtures**, through an
-explicit host Python adapter and the deterministic scripted model. The same four
-tools use durable task/profile/request-bound quotes and the original single-attempt
-gate. The simulator remains the CLI default. Fixture reconciliation and delivery
-acceptance stay separate operator actions; agent status and retries perform neither.
-Published with its reviewed concurrency correction at
-[`6198c97`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128);
-the [exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42416229737)
-passed 657 tests, isolation/subprocess checks and repeated demos. See the
-[offline buyer contract, recovery and validation](docs/phase3b5.md).
+These hold within the documented assumptions: one operator, one host, retained and
+consistent local SQLite state. See [Limits and next phase](#limits-and-next-phase).
 
-**Phase 3B.6 adds offline evaluation and call-budget preparation**, published at
-[`bcaa94c`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/bcaa94c0c2a8baa4abb673f3db25ac58450f0832)
-with [708 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42424403222).
-Its evaluator scores real fixture ledger/authority records and tool
-traces. A separate simulator suite exercises the pinned Responses wire path through
-an in-memory transport, with complete serialized-body bounds and durable planning
-reservations. It makes no API calls and does not enable live models on the x402
-buyer. See [evaluation, accounting and remaining prerequisites](docs/phase3b6.md).
-The [versioned offline evaluation catalog](evals/README.md) maps its seven existing
-cases into two linked sequences and validates their metadata against actual evaluator
-check identifiers. The catalog describes coverage; it does not drive execution.
+## Milestones
 
-A separate [bounded Luna simulator evaluation campaign](docs/luna-evaluation.md)
-freezes eight cases across three trials with one durable request/cost envelope.
-One separately authorized campaign completed all 24 entries on 2026-11-09
-(America/Argentina/Cordoba): 82 known complete Responses requests, estimated
-USD 0.0066626 (not verified billing), six new simulated charges and zero replay
-charges. It added no unresolved API reservation and preserved seeded unknown
-payment exposure. Deterministic safety/accounting checks passed; human explanation
-review remains pending. See the [sanitized baseline and four review examples](docs/luna-baseline.md).
-This exploratory sample does not establish general reliability or injection
-resistance. The historical USD 0.001239 unresolved API reservation and USD 0.0007724
-pilot estimate remain separate and unchanged. No further live calls or live models
-on x402 are authorized.
+| Milestone | What it added | Details |
+| --- | --- | --- |
+| Phase 1 | Offline payment simulator | [architecture](docs/architecture.md) |
+| Phase 2 | Bounded OpenAI SDK buyer | [phase2](docs/phase2.md) |
+| Phase 3B.1 | Offline x402 validation gate | [phase3b1](docs/phase3b1.md) |
+| Phase 3B.2 | Offline merchant integration | [phase3b2](docs/phase3b2.md) |
+| Phase 3B.3 | Evidence validation and reconciliation | [phase3b3](docs/phase3b3.md) |
+| Phase 3B.4 | Buyer delivery acceptance | [phase3b4](docs/phase3b4.md) |
+| Phase 3B.5 | Buyer connected to x402 fixtures | [phase3b5](docs/phase3b5.md) |
+| Phase 3B.6 | Offline evaluation and call budgets | [phase3b6](docs/phase3b6.md) |
+| Phase 3B.7 | Pinned runtime and pilot preparation | [phase3b7](docs/phase3b7.md) |
+| Phase 3B.8 | Guarded simulator live pilot | [phase3b8](docs/phase3b8.md) |
+| Luna evaluation | 24-entry simulator campaign | [evaluation](docs/luna-evaluation.md), [baseline](docs/luna-baseline.md) |
+| Paired comparison | Offline preparation and preflight contract | [evaluation](docs/paired-evaluation.md), [preflight](docs/paired-preflight.md) |
+| Generation adapter | Prepared, not executed | [rehearsal](docs/generation-compatibility.md), [adapter](docs/generation-live-adapter.md) |
 
-**Phase 3B.7 prepares a guarded simulator pilot offline**, with a checksum-pinned
-Python 3.12.16 / SQLite 3.53.1 runtime, sourced Luna pricing and cache-write lifetime
-accounting. Its supported fresh-state initializer checks the actual runtime before
-opening durable state. Responses still use in-memory mocks; live activation is
-rejected. The existing `.venv`/system SQLite remains unpatched. This preparation
-was published at
-[`4580e76`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/4580e764cdac9925def8510be2e845c611de9af8)
-with [770 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42434354806).
-See [runtime provenance and usage](docs/phase3b7.md).
-
-**Phase 3B.8 adds guarded simulator live-pilot activation.** Offline validation
-covers the shared request/cost envelope, exact routing, serialized policy and
-incremental raw usage. A separately authorized Luna pilot completed purchase,
-same-purchase replay and unaffordable refusal on 2026-11-08: ten new requests,
-one simulated charge and no duplicate execution. Its USD 0.0007724 usage-based
-estimate is separate from the original stopped request's unchanged USD 0.001239
-reservation. No further live calls are authorized by this milestone. See the
-[sanitized pilot evidence, activation boundaries and limitations](docs/phase3b8.md).
-
-The buyer uses the official Python Agents SDK with Responses and four bounded
-tools. Real payment integrations require another approved phase. No alternative
-agent orchestration framework is used.
+Each milestone is described in [Milestone history](#milestone-history) below.
 
 ## Quick start
 
@@ -119,6 +81,9 @@ versions; `pyproject.toml` defines compatibility bounds.
 uv sync --locked
 uv run --offline --no-sync payments-lab demo
 ```
+
+This is enough for the simulator demo. The full test suite needs the pinned runtime
+described under [Validation](#validation).
 
 Dependency installation can use the internet. After installation, the Phase 1
 commands, offline buyer, and all tests run without credentials or networking.
@@ -250,6 +215,119 @@ contents is an error, so use a new state directory for a new timed scenario.
   cancellation and recovery of already purchased resources.
 - A bounded `BuyerSession` interface for future agent tools; no signing, grant
   creation, task creation, or arbitrary URL input in that interface.
+
+## Milestone history
+
+**Phase 1 is accepted; Phase 2 adds a bounded OpenAI SDK buyer. All payments and
+receipts remain simulated.** The buyer defaults to a credential-free scripted
+model through the actual SDK runner. Explicit live Responses acceptance checks passed
+for free acquisition, simulated paid acquisition, replay, and unaffordable refusal.
+These are bounded integration checks, not evidence of general model reliability.
+
+**Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
+signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
+USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
+The original slice is separate from the agent/CLI. See [scope, evidence and recovery](docs/phase3b1.md),
+including the unresolved SQLite WAL-reset patch prerequisite for live use.
+
+**Phase 3B.2 adds offline merchant integration** through FastAPI and HTTPX ASGI:
+explicit host enrollment, the required payment-identifier extension, durable
+request/nonce binding, one settlement-double invocation per committed claim, and
+non-charging cached retrieval. Pending or interrupted attempts never retry settlement.
+Merchant-reported success does not settle buyer accounting. There is no agent/CLI
+backend switch, real signer or facilitator connection. See the
+[offline merchant contract and failure matrix](docs/phase3b2.md).
+
+**Phase 3B.3 adds offline evidence validation and explicit reconciliation** over
+bounded synthetic public records. Matching finalized fixture receipts/events or
+post-expiry non-use can resolve the original buyer reservation exactly once.
+Missing, malformed or provisional evidence stays inconclusive; a contradiction
+after accepted finality records an operator incident without reversing accounting.
+This is a fixture-only Python operator API, with no RPC client, real proof, startup
+worker or agent/CLI integration. See [evidence, recovery and limits](docs/phase3b3.md).
+
+**Phase 3B.4 adds explicit offline buyer delivery acceptance** for an already
+fixture-settled purchase. A non-charging ASGI retrieval validates the original
+request, purchase identity and deterministic content before recording one durable
+acceptance in the buyer audit. Repeated calls, concurrent callers and restarts
+cannot duplicate acceptance or execute another payment. Delivery failure preserves
+settled accounting; finality incidents fence new acceptance. This milestone is
+published at `2fce3e6`. See [delivery acceptance and limits](docs/phase3b4.md).
+
+**Phase 3B.5 connects the bounded buyer to offline x402 fixtures**, through an
+explicit host Python adapter and the deterministic scripted model. The same four
+tools use durable task/profile/request-bound quotes and the original single-attempt
+gate. The simulator remains the CLI default. Fixture reconciliation and delivery
+acceptance stay separate operator actions; agent status and retries perform neither.
+Published with its reviewed concurrency correction at
+[`6198c97`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/6198c97d5ad4e30ae9b1dff8380cbfdc8d11f128);
+the [exact-SHA hosted run](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42416229737)
+passed 657 tests, isolation/subprocess checks and repeated demos. See the
+[offline buyer contract, recovery and validation](docs/phase3b5.md).
+
+**Phase 3B.6 adds offline evaluation and call-budget preparation**, published at
+[`bcaa94c`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/bcaa94c0c2a8baa4abb673f3db25ac58450f0832)
+with [708 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42424403222).
+Its evaluator scores real fixture ledger/authority records and tool
+traces. A separate simulator suite exercises the pinned Responses wire path through
+an in-memory transport, with complete serialized-body bounds and durable planning
+reservations. It makes no API calls and does not enable live models on the x402
+buyer. See [evaluation, accounting and remaining prerequisites](docs/phase3b6.md).
+The [versioned offline evaluation catalog](evals/README.md) maps its seven existing
+cases into two linked sequences and validates their metadata against actual evaluator
+check identifiers. The catalog describes coverage; it does not drive execution.
+
+A separate [bounded Luna simulator evaluation campaign](docs/luna-evaluation.md)
+freezes eight cases across three trials with one durable request/cost envelope.
+One separately authorized campaign completed all 24 entries on 2026-11-09
+(America/Argentina/Cordoba): 82 known complete Responses requests, estimated
+USD 0.0066626 (not verified billing), six new simulated charges and zero replay
+charges. It added no unresolved API reservation and preserved seeded unknown
+payment exposure. Deterministic safety/accounting checks passed; human explanation
+review remains pending. See the [sanitized baseline and four review examples](docs/luna-baseline.md).
+This exploratory sample does not establish general reliability or injection
+resistance. The historical USD 0.001239 unresolved API reservation and USD 0.0007724
+pilot estimate remain separate and unchanged. No further live calls or live models
+on x402 are authorized.
+
+**Phase 3B.7 prepares a guarded simulator pilot offline**, with a checksum-pinned
+Python 3.12.16 / SQLite 3.53.1 runtime, sourced Luna pricing and cache-write lifetime
+accounting. Its supported fresh-state initializer checks the actual runtime before
+opening durable state. Responses still use in-memory mocks; live activation is
+rejected. The existing `.venv`/system SQLite remains unpatched. This preparation
+was published at
+[`4580e76`](https://github.com/AlvLeoAI/Agentic-Payments-Lab/commit/4580e764cdac9925def8510be2e845c611de9af8)
+with [770 passing hosted tests](https://github.com/AlvLeoAI/Agentic-Payments-Lab/actions/runs/42434354806).
+See [runtime provenance and usage](docs/phase3b7.md).
+
+**Phase 3B.8 adds guarded simulator live-pilot activation.** Offline validation
+covers the shared request/cost envelope, exact routing, serialized policy and
+incremental raw usage. A separately authorized Luna pilot completed purchase,
+same-purchase replay and unaffordable refusal on 2026-11-08: ten new requests,
+one simulated charge and no duplicate execution. Its USD 0.0007724 usage-based
+estimate is separate from the original stopped request's unchanged USD 0.001239
+reservation. No further live calls are authorized by this milestone. See the
+[sanitized pilot evidence, activation boundaries and limitations](docs/phase3b8.md).
+
+The [paired Luna/Haiku evaluation](docs/paired-evaluation.md) is a separate
+preparation candidate: shared simulator authority, native HTTP mocks, matched
+48-episode schedule and durable count/reservation accounting. A separately guarded
+[non-generating preflight](docs/paired-preflight.md) does not authorize comparison
+generation. No live comparison results are claimed; historical pilot evidence and
+the read-only viewer stay unchanged.
+
+The [bounded generation adapter](docs/generation-live-adapter.md) is prepared,
+not executed. Its [mock-only rehearsal](docs/generation-compatibility.md) reserves
+counted input plus an explicit margin before any generation. The separate live
+adapter is limited to at most four POST attempts (one count and one generation per
+provider), with no tool execution, retries or follow-up turns, inside the existing
+USD 3 aggregate / USD 1.50 per-provider envelope. It was developed and validated
+with synthetic keys and mock HTTP under OS network isolation. Implementation and
+documentation approval are not execution approval.
+
+The buyer uses the official Python Agents SDK with Responses and four bounded
+tools. Real payment integrations require another approved phase. No alternative
+agent orchestration framework is used.
 
 ## Validation
 
@@ -391,6 +469,9 @@ Use fresh development state and review the
 [upgrade procedure](docs/phase3b1.md#persistence-and-upgrade) before opening retained state.
 An uncertain outcome may remain reserved indefinitely until authoritative
 reconciliation. Availability is deliberately sacrificed when the result is unknown.
+
+Current verification status, the open review findings and the prerequisites for
+any live generation run are tracked in the [handoff](docs/handoff.md).
 
 See [architecture and recovery decisions](docs/architecture.md) and the
 [threat model](docs/threat-model.md). Phase 2 offline validation demonstrates runner

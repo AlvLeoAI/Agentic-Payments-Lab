@@ -95,10 +95,11 @@ matched the source snapshot before and after the run. Hosted CI and browser
 rendering are not part of this local evidence.
 
 Since `cb91e9c`, `d36e9d7` added three regression tests and corrected one comment
-in `comparison_wire.py`; no runtime behavior changed. It has no retained local
-evidence run of its own: hosted CI runs the full isolated suite on its pull
-request. Every other change since `cb91e9c` is documentation or the CI job
-timeout. To check, run `git diff --stat cb91e9c..HEAD`.
+in `comparison_wire.py`, and `1912ca2` made one existing concurrency test
+independent of SQLite lock-wait timing; no runtime behavior changed. Neither has
+a retained local evidence run of its own: hosted CI runs the full isolated suite
+on each pull request. Every other change since `cb91e9c` is documentation or the
+CI job timeout. To check, run `git diff --stat cb91e9c..HEAD`.
 
 Historical precommit reports also claimed preservation of 46,135 historical entries,
 2,882 previous offline/review entries and 162 pre-adapter source files, including

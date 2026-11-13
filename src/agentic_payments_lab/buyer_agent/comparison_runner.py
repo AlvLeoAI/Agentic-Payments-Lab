@@ -112,7 +112,10 @@ class MockExchange(httpx2.AsyncBaseTransport):
                 if not self.comparison.finish_count(self.entry, self.count_id, payload):
                     raise BudgetDenied("comparison_count_unverified")
             else:
-                self.evidence = parse_response(provider, payload, self.seen_ids)
+                evidence = parse_response(provider, payload, self.seen_ids)
+                # Nested JSON is decoded only by parse_response: recheck before retention.
+                self.check_decoded(payload, evidence)
+                self.evidence = evidence
                 if not self.comparison.observe(self.entry, self.request_id, self.evidence):
                     raise BudgetDenied("comparison_response_unverified")
             return httpx2.Response(
@@ -144,6 +147,9 @@ class MockExchange(httpx2.AsyncBaseTransport):
 
     def check_response(self, raw, payload):
         """Live specialization rejects credential reflection before any retention."""
+
+    def check_decoded(self, payload, evidence):
+        """Live specialization repeats that rejection on the fully decoded record."""
 
     async def aclose(self):
         await self._wire.aclose()

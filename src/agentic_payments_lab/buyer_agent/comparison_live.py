@@ -95,6 +95,9 @@ class LiveExchange(MockExchange):
     def check_response(self, raw, payload):
         self._wire.check_payload(raw, payload)
 
+    def check_decoded(self, payload, evidence):
+        self._wire.check_decoded(payload, evidence)
+
     @quiet_wire
     async def handle_async_request(self, request):
         try:

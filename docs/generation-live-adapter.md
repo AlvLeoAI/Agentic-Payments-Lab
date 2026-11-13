@@ -18,7 +18,10 @@ fallback model/provider or model-read GET is allowed.
 
 `ProviderWire` supplies first-party endpoints/TLS, no proxies/redirects/retries,
 authentication only after a durable claim, and credential-reflection checks before
-response retention. The exchange bounds requests and raw responses, and bounds
+response retention. Those checks cover the raw bytes, the decoded response and the
+JSON carried inside its strings (final-output text, OpenAI arguments), plus the
+evidence record itself; other encodings such as base64 are not decoded or checked.
+The exchange bounds requests and raw responses, and bounds
 cleanup. The new authority permits only the exact pending count/generation POST
 for its current owner, slot, provider and body hash. Claims are unique and retained.
 The trusted Python host is not a sandbox against malicious imports, state cloning

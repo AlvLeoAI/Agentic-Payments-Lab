@@ -13,7 +13,7 @@ from pathlib import Path
 
 import httpx2
 import pytest
-from comparison_support import payload, responders
+from comparison_support import nested_reflection, payload, responders
 from preflight_support import KEYS, reply
 from test_comparison import counted
 from test_comparison_recovery import payment_facts
@@ -178,6 +178,32 @@ def test_failed_generation_never_retries_or_releases_unknown_exposure(enrolled, 
     with pytest.raises(BudgetDenied):
         run(Comparison(enrolled.path))
     assert len(requests) == 2
+    assert_no_keys(enrolled, json.dumps(report))
+
+
+@pytest.mark.parametrize(
+    "provider,arguments", [("openai", False), ("openai", True), ("anthropic", False)]
+)
+def test_nested_json_credential_reflection_stops_before_retention(
+    enrolled, monkeypatch, provider, arguments
+):
+    secret = KEYS[provider].get_secret_value()
+    data = nested_reflection(provider, secret, arguments=arguments)
+
+    async def mutate(entry, request, normal):
+        if entry["provider"] != provider or str(request.url) in COUNT_ENDPOINTS.values():
+            return await normal(request)
+        return httpx2.Response(200, json=data)
+
+    _, _, requests = scripted_wires(enrolled, monkeypatch, mutate)
+    report = run(enrolled)
+    generations = [entry["provider"] for entry, url in requests if url in ENDPOINTS.values()]
+    assert generations.count(provider) == 1 and generations[-1] == provider
+    assert report["campaign"]["status"] == "stopped"
+    assert report["verified_complete_responses"] == len(generations) - 1
+    assert report["unresolved_exposure_nano_usd"] == reservation_estimate(provider, 10)
+    with pytest.raises(BudgetDenied):
+        run(Comparison(enrolled.path))
     assert_no_keys(enrolled, json.dumps(report))
 
 

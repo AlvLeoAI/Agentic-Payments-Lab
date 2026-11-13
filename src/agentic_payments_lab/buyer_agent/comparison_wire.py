@@ -7,6 +7,7 @@ in-memory wires; ordinary comparison paths still construct MockTransport only.
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import threading
@@ -106,6 +107,31 @@ class ProviderWire(httpx2.AsyncBaseTransport):
         secret = self._key.get_secret_value()
         if secret.encode() in raw or (payload is not None and secret in canonical(payload)):
             raise BudgetDenied("comparison_credential_reflection")
+
+    def check_decoded(self, *records):
+        """Exact key in any string, after decoding JSON that a string itself carries.
+
+        check_payload sees the raw bytes and one decode. Final-output text and
+        OpenAI arguments are decoded again, where an escape can spell the key.
+        Other encodings (base64, URL escapes) are not decoded anywhere and stay
+        outside this check.
+        """
+        secret = self._key.get_secret_value()
+        pending = list(records)
+        while pending:
+            value = pending.pop()
+            if type(value) is dict:
+                pending.extend(value)
+                pending.extend(value.values())
+            elif type(value) is list:
+                pending.extend(value)
+            elif type(value) is str:
+                if secret in value:
+                    raise BudgetDenied("comparison_credential_reflection")
+                try:
+                    pending.append(json.loads(value))  # Strictly shorter: terminates.
+                except (ValueError, RecursionError):
+                    pass  # Not JSON, so no later decode can reveal more.
 
     @quiet_wire
     async def handle_async_request(self, request):

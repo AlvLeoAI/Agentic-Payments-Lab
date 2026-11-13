@@ -7,7 +7,7 @@ import sqlite3
 
 import httpx2
 import pytest
-from comparison_support import count_payload, payload
+from comparison_support import count_payload, nested_reflection, payload
 from pydantic import SecretStr
 
 from agentic_payments_lab.buyer_agent import generation_probe_live as live
@@ -212,6 +212,28 @@ def test_uncertainty_stops_without_retry_and_keeps_reservation(tmp_path, monkeyp
     assert len(calls) == 2 and report["state"]["status"] == "stopped"
     assert report["retained_probe_allocation_nano"]["openai"] >= 359400
     assert all(k.get_secret_value() not in json.dumps(result) for k in KEYS.values())
+
+
+@pytest.mark.parametrize("arguments", [False, True])
+def test_nested_json_credential_reflection_stops_before_retention(tmp_path, monkeypatch, arguments):
+    probe = prepare(tmp_path)
+    calls = []
+    secret = KEYS["openai"].get_secret_value()
+
+    def mutation(provider, kind, data):
+        if kind != "generation":
+            return data
+        return nested_reflection(provider, secret, arguments=arguments)
+
+    result = run(probe, monkeypatch, calls, mutation)
+    report = result["later_report"]
+    assert not result["overall_complete"]
+    assert len(calls) == 2 and report["state"]["status"] == "stopped"
+    assert report["retained_probe_allocation_nano"]["openai"] >= 359400
+    assert secret not in json.dumps(result)
+    for file in tmp_path.rglob("*"):
+        if file.is_file():
+            assert secret.encode() not in file.read_bytes(), file.name
 
 
 @pytest.mark.parametrize("provider,ceiling", [("openai", 272000), ("anthropic", 100000)])

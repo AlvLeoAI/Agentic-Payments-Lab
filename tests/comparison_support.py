@@ -4,8 +4,13 @@ import json
 
 import httpx2
 
-from agentic_payments_lab.buyer_agent.comparison_protocol import COUNT_ENDPOINTS, MODELS
+from agentic_payments_lab.buyer_agent.comparison_protocol import (
+    COUNT_ENDPOINTS,
+    MODELS,
+    parse_response,
+)
 from agentic_payments_lab.buyer_agent.scripted import ScriptedBuyer
+from agentic_payments_lab.domain import canonical
 
 
 def usage(provider):
@@ -93,6 +98,26 @@ def payload(
         ),
         "usage": usage(provider),
     }
+
+
+def nested_reflection(provider, secret, *, arguments=False):
+    """Synthetic credential escaped INSIDE JSON carried by a string.
+
+    The raw bytes and the first decode never contain it; only the second decode of
+    the final-output text or the OpenAI ``arguments`` string reveals it.
+    """
+    escaped = f"\\u{ord(secret[0]):04x}{secret[1:]}"
+    if arguments:
+        data = payload(provider, tool="get_quote", arguments={"service_id": secret})
+        carrier, field = data["output"][0], "arguments"
+    else:
+        data = payload(provider, explanation=secret)
+        carrier = data["output"][0]["content"][0] if provider == "openai" else data["content"][0]
+        field = "text"
+    carrier[field] = carrier[field].replace(secret, escaped)
+    assert secret not in json.dumps(data) and secret not in canonical(data)
+    assert secret in canonical(parse_response(provider, data))
+    return data
 
 
 def responders(calls, mutation=None, counts=None):

@@ -130,8 +130,13 @@ class ProviderWire(httpx2.AsyncBaseTransport):
                     raise BudgetDenied("comparison_credential_reflection")
                 try:
                     pending.append(json.loads(value))  # Strictly shorter: terminates.
-                except (ValueError, RecursionError):
+                except ValueError:
                     pass  # Not JSON, so no later decode can reveal more.
+                except RecursionError:
+                    # Possibly JSON, nested too deeply to decode here. Whatever
+                    # parse_response does decode is in the evidence record,
+                    # which is checked as well.
+                    pass
 
     @quiet_wire
     async def handle_async_request(self, request):

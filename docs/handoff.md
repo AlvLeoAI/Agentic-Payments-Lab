@@ -30,9 +30,9 @@ adapter-preparation work.
 - Adapter commit, also the review baseline: `e3944fa9f0202c0099f1a06b09038a67b9f3a61e`
   (`Prepare bounded generation probe with counted reservations and offline safeguards`).
 - Published handoff baseline: `28bfe29f87386ea51af2e7ae82090db6559fca32`.
-- Branch: `payments/bounded-generation-adapter-offline`, tracking `origin`. If
-  `git status -sb` shows no upstream, compare `git rev-parse HEAD
-  origin/payments/bounded-generation-adapter-offline` instead.
+- Branch: `payments/bounded-generation-adapter-offline`, merged into `main` by
+  pull request #1 on 2026-11-13 (merge commit `2a8096e`). Work since then is on
+  short-lived branches cut from `main`, one pull request each.
 - Exactly 28 approved source/test/documentation files; no runtime databases or
   evidence directories committed. The adapter and original handoff are included
   in the published branch at `28bfe29`; later maintenance commits are separate.
@@ -92,8 +92,13 @@ Claude Code configuration only.
 tests); the full validator exited 0 in 1,619 seconds overall, with the same checks,
 isolation and synthetic-only inputs as the 2026-11-12 run. All 173 tracked files
 matched the source snapshot before and after the run. Hosted CI and browser
-rendering are not part of this local evidence. To confirm that nothing but
-documentation changed since, run `git diff --stat cb91e9c..HEAD`.
+rendering are not part of this local evidence.
+
+Since `cb91e9c`, `d36e9d7` added three regression tests and corrected one comment
+in `comparison_wire.py`; no runtime behavior changed. It has no retained local
+evidence run of its own: hosted CI runs the full isolated suite on its pull
+request. Every other change since `cb91e9c` is documentation or the CI job
+timeout. To check, run `git diff --stat cb91e9c..HEAD`.
 
 Historical precommit reports also claimed preservation of 46,135 historical entries,
 2,882 previous offline/review entries and 162 pre-adapter source files, including
@@ -399,14 +404,12 @@ The validator sets `UV_PROJECT_ENVIRONMENT` to its own interpreter prefix
 The five maintenance tasks are complete (see [current phase](#current-phase-and-priority)).
 The one code change since (`cb91e9c`) was a user-requested fix from the PR #1
 review and is revalidated. There is no authorized next task. Wait for the user. Do
-not change adapter code or prepare a live probe without a new request. Keep the remaining ranked findings and execution
-prerequisites visible. No date authorizes credential loading, exposure resets or
-live execution.
+not change adapter code or prepare a live probe without a new request. Keep the
+remaining ranked findings and execution prerequisites visible. No date authorizes
+credential loading, exposure resets or live execution.
 
-Open decision for the user: `main` (`b199090`) ends at the Luna evaluation baseline
-(Phase 3B.8 and the viewer). Everything from `e3944fa` onward (paired comparison,
-generation adapter, this handoff and its maintenance) is only on
-`payments/bounded-generation-adapter-offline`, a fast-forward of `main`. Pull request
-[#1](https://github.com/AlvLeoAI/Agentic-Payments-Lab/pull/1) was opened on
-2026-11-13 with the user's approval and is under review. Merging it is the user's
-decision: do not merge it, and do not push to it, without approval.
+`main` contains this work: pull request
+[#1](https://github.com/AlvLeoAI/Agentic-Payments-Lab/pull/1) merged
+`payments/bounded-generation-adapter-offline` on 2026-11-13 as `2a8096e`. Later
+changes go through their own pull requests. Do not push to `main`, and do not
+open or merge a pull request, without the user's approval.

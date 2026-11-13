@@ -219,9 +219,10 @@ allocations. Human explanation judgments remain pending.
 
 The full local validator also checks locked dependencies, Ruff, formatting,
 subprocess isolation, repeated demos, direct payment-authority idempotency,
-evaluations and the viewer. Hosted CI is separate evidence. Its unchanged
-20-minute job timeout may be insufficient for this expanded suite plus dependency
-installation; tests and fail-closed isolation are not weakened to obtain green CI.
+evaluations and the viewer. Hosted CI is separate evidence. Its earlier
+20-minute job timeout proved too tight for this expanded suite plus dependency
+installation (one run was cancelled at the limit), so it is now 30 minutes;
+tests and fail-closed isolation are not weakened to obtain green CI.
 An authenticated probe result is also separate evidence and cannot establish that
 a hosted run passed or that the operator's older system SQLite was fixed.
 

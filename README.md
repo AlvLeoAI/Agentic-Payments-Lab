@@ -302,7 +302,7 @@ checks but do not establish OS-level isolation. Likewise, `uv --offline` restric
 dependency access, not application networking.
 
 CI targets Ubuntu 24.04. The configuration installs the same checksum-pinned
-runtime and locked dependencies before isolation, with a 20-minute whole-job
+runtime and locked dependencies before isolation, with a 30-minute whole-job
 timeout. The timeout was increased to accommodate the expanded local validator
 and setup; no validation step or isolation check was removed. Hosted CI has not
 run for this uncommitted catalog/campaign/closure candidate. Local validation is

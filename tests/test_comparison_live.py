@@ -15,12 +15,14 @@ import httpx2
 import pytest
 from comparison_support import nested_reflection, payload, responders
 from preflight_support import KEYS, reply
+from pydantic import SecretStr
 from test_comparison import counted
 from test_comparison_recovery import payment_facts
 
 from agentic_payments_lab.buyer_agent import comparison_live as live
 from agentic_payments_lab.buyer_agent import comparison_preflight as preflight_module
 from agentic_payments_lab.buyer_agent import comparison_wire as wire_module
+from agentic_payments_lab.buyer_agent.boundary import Boundary
 from agentic_payments_lab.buyer_agent.call_budget import BudgetDenied
 from agentic_payments_lab.buyer_agent.comparison import Comparison, initialize_comparison
 from agentic_payments_lab.buyer_agent.comparison_preflight import (
@@ -31,6 +33,7 @@ from agentic_payments_lab.buyer_agent.comparison_protocol import (
     COUNT_ENDPOINTS,
     ENDPOINTS,
     reservation_estimate,
+    safe_text,
 )
 from agentic_payments_lab.domain import digest
 
@@ -181,15 +184,7 @@ def test_failed_generation_never_retries_or_releases_unknown_exposure(enrolled, 
     assert_no_keys(enrolled, json.dumps(report))
 
 
-@pytest.mark.parametrize(
-    "provider,arguments", [("openai", False), ("openai", True), ("anthropic", False)]
-)
-def test_nested_json_credential_reflection_stops_before_retention(
-    enrolled, monkeypatch, provider, arguments
-):
-    secret = KEYS[provider].get_secret_value()
-    data = nested_reflection(provider, secret, arguments=arguments)
-
+def assert_reflection_stops_before_retention(enrolled, monkeypatch, provider, data):
     async def mutate(entry, request, normal):
         if entry["provider"] != provider or str(request.url) in COUNT_ENDPOINTS.values():
             return await normal(request)
@@ -205,6 +200,59 @@ def test_nested_json_credential_reflection_stops_before_retention(
     with pytest.raises(BudgetDenied):
         run(Comparison(enrolled.path))
     assert_no_keys(enrolled, json.dumps(report))
+
+
+@pytest.mark.parametrize(
+    "provider,arguments", [("openai", False), ("openai", True), ("anthropic", False)]
+)
+def test_nested_json_credential_reflection_stops_before_retention(
+    enrolled, monkeypatch, provider, arguments
+):
+    secret = KEYS[provider].get_secret_value()
+    data = nested_reflection(provider, secret, arguments=arguments)
+    assert_reflection_stops_before_retention(enrolled, monkeypatch, provider, data)
+
+
+def test_prefixed_credential_missed_by_sanitizer_stops_before_retention(enrolled, monkeypatch):
+    # Synthetic marker shaped like a provider key. Redaction is not the control here:
+    # the generic \bsk- pattern needs a word boundary, which the prefix removes.
+    monkeypatch.setitem(KEYS, "openai", SecretStr("sk-synthetic-marker-not-a-real-key-000000"))
+    secret = KEYS["openai"].get_secret_value()
+    assert secret not in safe_text(secret)[0] and secret in safe_text("x" + secret)[0]
+    data = nested_reflection("openai", secret, prefix="x")
+    assert_reflection_stops_before_retention(enrolled, monkeypatch, "openai", data)
+
+
+@pytest.mark.parametrize("arguments", [False, True])
+def test_decoded_rejection_leaves_no_evidence_observation_or_tool_call(
+    enrolled, monkeypatch, arguments
+):
+    exchanges, used = [], []
+
+    class Recording(live.LiveExchange):
+        def __init__(self, *args):
+            super().__init__(*args)
+            exchanges.append(self)
+
+    def record(owner, name):
+        original = getattr(owner, name)
+
+        def spy(*args, **kwargs):
+            used.append(name)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(owner, name, spy)
+
+    monkeypatch.setattr(live.NativeLiveModel, "exchange_type", Recording)
+    record(Comparison, "observe")
+    record(Comparison, "tool_intent")
+    record(Boundary, "invoke")
+    secret = KEYS["openai"].get_secret_value()
+    data = nested_reflection("openai", secret, arguments=arguments)
+    assert_reflection_stops_before_retention(enrolled, monkeypatch, "openai", data)
+    assert len(exchanges) == 1 and exchanges[0].request_id is not None
+    assert exchanges[0].evidence is None
+    assert used == []
 
 
 @pytest.mark.parametrize("point", ["before_response", "partial_usage", "post_payment"])

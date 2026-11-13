@@ -100,18 +100,19 @@ def payload(
     }
 
 
-def nested_reflection(provider, secret, *, arguments=False):
+def nested_reflection(provider, secret, *, arguments=False, prefix=""):
     """Synthetic credential escaped INSIDE JSON carried by a string.
 
     The raw bytes and the first decode never contain it; only the second decode of
-    the final-output text or the OpenAI ``arguments`` string reveals it.
+    the final-output text or the OpenAI ``arguments`` string reveals it. ``prefix``
+    puts a character directly before it, as in ``xsk-...``.
     """
     escaped = f"\\u{ord(secret[0]):04x}{secret[1:]}"
     if arguments:
-        data = payload(provider, tool="get_quote", arguments={"service_id": secret})
+        data = payload(provider, tool="get_quote", arguments={"service_id": prefix + secret})
         carrier, field = data["output"][0], "arguments"
     else:
-        data = payload(provider, explanation=secret)
+        data = payload(provider, explanation=prefix + secret)
         carrier = data["output"][0]["content"][0] if provider == "openai" else data["content"][0]
         field = "text"
     carrier[field] = carrier[field].replace(secret, escaped)

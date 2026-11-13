@@ -13,6 +13,13 @@ private keys, blockchain RPCs, payment facilitators, or live x402 integrations.
 `SIM-USDC` uses six decimal places for arithmetic exercises; it
 is not USDC and has no monetary value. Simulator tasks use `simulation:local`.
 
+The [paired Luna/Haiku evaluation](docs/paired-evaluation.md) is a separate
+preparation candidate: shared simulator authority, native HTTP mocks, matched
+48-episode schedule and durable count/reservation accounting. A separately guarded
+[non-generating preflight](docs/paired-preflight.md) does not authorize comparison
+generation. No live comparison results are claimed; historical pilot evidence and
+the read-only viewer stay unchanged.
+
 **Phase 3B.1 adds an offline x402 validation/gate module**, exercised only with
 signer and dispatcher doubles in fresh, separately enrolled state. Its Base Sepolia
 USDC identifiers describe protocol fixtures; it cannot sign or send a payment.
@@ -247,8 +254,9 @@ contents is an error, so use a new state directory for a new timed scenario.
 ## Validation
 
 The full suite now requires the separately installed, verified Linux x86_64 runtime.
-The original `.venv` remains available for legacy simulator use; these commands do
-not replace it or open retained state. Installation may access package sources:
+Select `.runtime/venv` explicitly: uv's default `.venv` would be built from the system
+Python and its unpatched SQLite. These commands do not open retained state.
+Installation may access package sources:
 
 ```bash
 python3 scripts/prepare_runtime.py

@@ -1,0 +1,26 @@
+{
+  "env": {
+    "UV_PROJECT_ENVIRONMENT": ".runtime/venv"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(*--mode live*)",
+      "Bash(*--mode=live*)",
+      "Bash(*run_live_probe*)",
+      "Bash(*run_live_comparison*)",
+      "Bash(*run_live_scenario*)",
+      "Bash(*run_live_campaign*)",
+      "Bash(*api.openai.com*)",
+      "Bash(*api.anthropic.com*)",
+      "Bash(*OPENAI_API_KEY=*)",
+      "Bash(*ANTHROPIC_API_KEY=*)",
+      "Bash(*source .env*)",
+      "Bash(*. ./.env*)",
+      "Bash(*dotenv*)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.production)",
+      "Edit(./.env)"
+    ]
+  }
+}

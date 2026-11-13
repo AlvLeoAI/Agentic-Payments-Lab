@@ -235,7 +235,16 @@ def test_100_identical_usage_settlements_are_idempotent_and_conflict_fences(comp
     evidence = parse_response("openai", payload("openai"))
 
     def observe(_):
-        return comparison.observe(entry, request_id, copy.deepcopy(evidence))
+        # connect() waits only 0.1 s for the write lock, by design. Eight writers on
+        # a slow disk can exceed that. A locked attempt changes nothing, so the
+        # identical settlement is repeated; every one must still be accepted.
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                return comparison.observe(entry, request_id, copy.deepcopy(evidence))
+            except sqlite3.OperationalError as error:
+                if "locked" not in str(error) or time.monotonic() > deadline:
+                    raise
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert all(pool.map(observe, range(100)))

@@ -11,7 +11,8 @@
   "Stop" means: make no further commits or changes outside a task the user gives in
   chat. Claude Code sessions also load the hard rules in the repository-root `CLAUDE.md`.
 
-Updated 2026-11-12. This is a separately authorized handoff document, written
+Updated 2026-11-13 (maintenance 2026-11-12; Claude Code onboarding and `.venv`
+removal 2026-11-13). This is a separately authorized handoff document, written
 AFTER the completed read-only consistency review. It does not amend that review,
 change code or authorize execution. The original handoff was committed and pushed
 as `28bfe29f87386ea51af2e7ae82090db6559fca32`. The worktree was clean at the start
@@ -25,10 +26,12 @@ consistency review was read-only and reported findings without fixes. **No new l
 payment is authorized.** Earlier historical live usage is distinct from this
 adapter-preparation work.
 
-- Adapter review baseline: `e3944fa9f0202c0099f1a06b09038a67b9f3a61e`.
+- Adapter commit, also the review baseline: `e3944fa9f0202c0099f1a06b09038a67b9f3a61e`
+  (`Prepare bounded generation probe with counted reservations and offline safeguards`).
 - Published handoff baseline: `28bfe29f87386ea51af2e7ae82090db6559fca32`.
-- Branch: `payments/bounded-generation-adapter-offline`.
-- Commit: `Prepare bounded generation probe with counted reservations and offline safeguards`.
+- Branch: `payments/bounded-generation-adapter-offline`, tracking `origin`. If
+  `git status -sb` shows no upstream, compare `git rev-parse HEAD
+  origin/payments/bounded-generation-adapter-offline` instead.
 - Exactly 28 approved source/test/documentation files; no runtime databases or
   evidence directories committed. The adapter and original handoff are included
   in the published branch at `28bfe29`; later maintenance commits are separate.
@@ -95,7 +98,9 @@ the strict gate. Models are `gpt-6-luna` and `claude-haiku-5-5`. Both request 51
 TOTAL output tokens including reasoning/thinking, with reasoning `none` and
 thinking disabled. Tool schemas remain for compatibility testing but no tool is
 executed. No retries, resume, model-read GET, fallback, follow-up turns or payments.
-Claims bind the current owner, exact body, endpoint, slot and provider before auth.
+Claims bind the current owner (the run's durable exclusive owner record), exact
+body, endpoint, slot (the request's position in the fixed attempt schedule) and
+provider before auth.
 Official endpoints/TLS, no proxy/redirect/retry, bounded raw bodies, transient keys
 and credential-reflection checks are enforced by the shared wire/exchange.
 
@@ -242,10 +247,12 @@ Open before any live probe: explicit execution approval; complete prior-inventor
 reconciliation; chosen shared authority identity/path; current source and body
 hash review; preflight-lineage acceptance; reported-rate/margin acceptance;
 uncached-mode residual-risk acceptance or resolution of missing pricing/control;
-the SQLite WAL-reset prerequisite. It is satisfied only by the pinned `.runtime/`
-interpreter ([phase3b7](phase3b7.md)). The old `.venv` and system SQLite remain
-unpatched, and other runtimes are not accepted
-([phase3b1](phase3b1.md#sqlite-prerequisite--live-use-blocked)).
+confirming the probe runs on the pinned `.runtime/` interpreter, the only runtime
+that satisfies the SQLite WAL-reset prerequisite ([phase3b7](phase3b7.md)). System SQLite remains unpatched, and other
+runtimes are not accepted ([phase3b1](phase3b1.md#sqlite-prerequisite--live-use-blocked)).
+The old system-Python `.venv` was removed locally on 2026-11-13; a bare
+`uv run`/`uv sync` would recreate it, so always select
+`UV_PROJECT_ENVIRONMENT=.runtime/venv`.
 Code review fields are trusted operator assertions, not proof of user consent.
 These terms (authority identity/path, preflight lineage, review fields, arms) are
 defined in [generation-live-adapter.md](generation-live-adapter.md) and
@@ -354,6 +361,8 @@ or prepare a live probe. Keep the remaining ranked findings and execution
 prerequisites visible. No date authorizes credential loading, exposure resets or
 live execution.
 
-Open decision for the user: `main` still describes Phase 2, and all of this work
-is on `payments/bounded-generation-adapter-offline`. Whether to merge it through a
-reviewed pull request is undecided. Do not open or merge one without approval.
+Open decision for the user: `main` (`b199090`) ends at the Luna evaluation baseline
+(Phase 3B.8 and the viewer). Everything from `e3944fa` onward (paired comparison,
+generation adapter, this handoff and its maintenance) is only on
+`payments/bounded-generation-adapter-offline`, a fast-forward of `main`. Whether to
+merge it through a reviewed pull request is undecided. Do not open or merge one without approval.

@@ -90,7 +90,8 @@ that boundary does not prove later reporting or cleanup was error-free.
 - Verify with `uv run --offline --no-sync pytest`, `uv run --offline --no-sync ruff check .`,
   and `uv run --offline --no-sync ruff format --check .`, selecting
   `UV_PROJECT_ENVIRONMENT=.runtime/venv`. Full runtime validation stays OS-isolated.
-- Run the credential-free demo with `uv run --offline --no-sync payments-lab demo`.
+- Run the credential-free demo with `UV_PROJECT_ENVIRONMENT=.runtime/venv uv run
+  --offline --no-sync payments-lab demo`.
 - Launch the historical viewer with `.runtime/venv/bin/python -I -B scripts/view_pilot.py`.
 - Preserve integer atomic amounts, transactional budget reservations, immutable
   purchase identity, and the separation of payment and delivery states.

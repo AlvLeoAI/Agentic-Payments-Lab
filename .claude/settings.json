@@ -1,4 +1,7 @@
 {
+  "env": {
+    "UV_PROJECT_ENVIRONMENT": ".runtime/venv"
+  },
   "permissions": {
     "deny": [
       "Bash(*--mode live*)",

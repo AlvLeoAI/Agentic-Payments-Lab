@@ -254,8 +254,9 @@ contents is an error, so use a new state directory for a new timed scenario.
 ## Validation
 
 The full suite now requires the separately installed, verified Linux x86_64 runtime.
-The original `.venv` remains available for legacy simulator use; these commands do
-not replace it or open retained state. Installation may access package sources:
+Select `.runtime/venv` explicitly: uv's default `.venv` would be built from the system
+Python and its unpatched SQLite. These commands do not open retained state.
+Installation may access package sources:
 
 ```bash
 python3 scripts/prepare_runtime.py

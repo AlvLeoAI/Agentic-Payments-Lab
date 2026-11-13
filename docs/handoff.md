@@ -11,8 +11,9 @@
   "Stop" means: make no further commits or changes outside a task the user gives in
   chat. Claude Code sessions also load the hard rules in the repository-root `CLAUDE.md`.
 
-Updated 2026-11-13 (maintenance 2026-11-12; Claude Code onboarding and `.venv`
-removal 2026-11-13). This is a separately authorized handoff document, written
+Updated 2026-11-13 (maintenance 2026-11-12; Claude Code onboarding, `.venv`
+removal, and the PR #1 credential-reflection fix with its revalidation
+2026-11-13). This is a separately authorized handoff document, written
 AFTER the completed read-only consistency review. It does not amend that review,
 change code or authorize execution. The original handoff was committed and pushed
 as `28bfe29f87386ea51af2e7ae82090db6559fca32`. The worktree was clean at the start
@@ -49,6 +50,19 @@ adapter-preparation work.
   shows it. Do not infer HEAD from this document: run `git status -sb` and
   `git log -3`. `git diff --stat 6a374a1..6f275ab` touches only `docs/handoff.md`
   and `docs/paired-evaluation.md`, which supports the documentation-only claim.
+- **One code change after the adapter commit:** `cb91e9c` (2026-11-13), requested
+  by the user from the PR #1 review. Final-output text and OpenAI tool arguments
+  are JSON carried inside a string; a credential escaped at that inner level passed
+  the raw and first-decode reflection checks and reached durable evidence.
+  `ProviderWire.check_decoded` (`comparison_wire.py`) now rejects the exact key in
+  the fully decoded response and evidence record before retention, called from the
+  shared exchange (`comparison_runner.py`). The finding named the paired runner;
+  the fix also adds the same three-line override to `comparison_live.py` and
+  `generation_probe_live.py`, because the generation adapter inherits that exchange
+  path and had the same gap. Five regression tests use synthetic keys only. Other
+  encodings (base64, URL escapes) are not decoded anywhere and are not checked.
+  This changes the reviewed source hash, so any earlier source review no longer
+  matches the code.
 - The maintenance window was: finish the five tasks before November 17, 2026, each
   in its own commit, then stop. The user's Codex/OpenAI subscription access ends
   around November 19, 2026; the repository and evidence directory remain. These dates do not
@@ -69,7 +83,17 @@ cases and the viewer-server check passed. OS network isolation and subprocess
 inheritance were verified. Only synthetic test credentials and mock provider HTTP
 were used; no real credentials or external network. Browser rendering and hosted
 CI were not tested. All 171 tracked files matched the source snapshot before and
-after the run; later maintenance edits are documentation only.
+after the run; the edits from `6a374a1` through `49953bf` are documentation and
+Claude Code configuration only.
+
+**Latest verified commit:** fresh local validation on 2026-11-13 at
+`cb91e9c35231e4e6237ed00eebbc42bf55e0d671`, after the credential-reflection fix:
+**1,454 tests passed in 1,578.16 seconds** (the 1,449 above plus 5 regression
+tests); the full validator exited 0 in 1,619 seconds overall, with the same checks,
+isolation and synthetic-only inputs as the 2026-11-12 run. All 173 tracked files
+matched the source snapshot before and after the run. Hosted CI and browser
+rendering are not part of this local evidence. To confirm that nothing but
+documentation changed since, run `git diff --stat cb91e9c..HEAD`.
 
 Historical precommit reports also claimed preservation of 46,135 historical entries,
 2,882 previous offline/review entries and 162 pre-adapter source files, including
@@ -237,6 +261,9 @@ Code references without a prefix above are under `src/agentic_payments_lab/`.
 - **LOW concrete observability issue:** statistics read can combine snapshots.
   The user decides whether a later separately scoped change should wrap it in
   one read transaction. This handoff does not implement a fix.
+- **Credential reflection through nested JSON — fixed in `cb91e9c`:** found by the
+  PR #1 review, not by the consistency review above. See the
+  [current phase](#current-phase-and-priority) entry; revalidated at that commit.
 - **LOW editorial — corrected in this maintenance:** `docs/paired-evaluation.md`
   now states that the preparation is committed and distinguishes the full paired
   runner's bounded tool-result turns from the minimal adapter's lack of follow-up
@@ -261,12 +288,14 @@ No fresh real authority or credential loading is needed to finish this handoff.
 
 ## Evidence and reproducible inspection
 
-Durable local evidence is outside Git at:
-`/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-12-handoff-maintenance/`.
+Durable local evidence is outside Git in two dated directories under
+`/home/alvaro/lab-evidence/agentic-payments-lab/`:
+`2026-11-12-handoff-maintenance/` (run at `6a374a1`) and
+`2026-11-13-credential-reflection-fix/` (run at `cb91e9c`, the latest verified commit).
 Do not delete, migrate, initialize old databases or overwrite stopped records.
-Read-only inspection of this directory (the commands below) is allowed.
-`sha256sum --check SHA256SUMS` was re-run on 2026-11-12 after maintenance: all 15
-listed files OK, exit 0.
+Read-only inspection of these directories (the commands below) is allowed.
+`sha256sum --check SHA256SUMS` was re-run on 2026-11-13: all 15 listed files OK in
+the first directory and all 8 in the second, exit 0.
 
 ### Lost historical evidence — recorded hashes are unverifiable
 
@@ -306,6 +335,15 @@ copied or hash-verified. These recorded hashes are retained only for traceabilit
 - `evidence-inventory.json` distinguishes the missing originals from the surviving
   document. `SHA256SUMS` verifies the retained files in this dated directory.
 
+In `2026-11-13-credential-reflection-fix/`, same single-run procedure at `cb91e9c`:
+
+- `full-validator.log`: SHA-256
+  `091c082cac5004b4281c0a0b25b9a98d8edb5bd1060dbcb041fc6306f62111cf`;
+  `full-validator.exit`: 0.
+- `fresh-validation.json`, `validation-provenance.json`, `validation-command.txt`,
+  UTC start/finish files and `tracked-content-before-validation.json` (173 files)
+  record the results, command and inputs. `SHA256SUMS` covers these 8 files.
+
 Fresh passing tests do not validate the lost historical logs or authorize a live
 probe. No real credentials, wallets, real payments or live-probe preparation were used.
 
@@ -320,6 +358,9 @@ git show e3944fa9f0202c0099f1a06b09038a67b9f3a61e:src/agentic_payments_lab/buyer
 handoff_evidence=/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-12-handoff-maintenance
 rg '[0-9]+ passed' "$handoff_evidence/full-validator.log"
 (cd "$handoff_evidence" && sha256sum --check SHA256SUMS)
+fix_evidence=/home/alvaro/lab-evidence/agentic-payments-lab/2026-11-13-credential-reflection-fix
+rg '[0-9]+ passed' "$fix_evidence/full-validator.log"
+(cd "$fix_evidence" && sha256sum --check SHA256SUMS)
 ```
 
 ### Offline test reproduction (WRITES temporary fixtures/logs; not read-only)
@@ -349,20 +390,23 @@ or represented as authorized. If the pinned runtime, dependencies or namespace
 support are unavailable, stop rather than bypass isolation. The validator manages
 temporary fixtures and caches outside the repository. Retain its output in a new
 dated directory under `/home/alvaro/lab-evidence/agentic-payments-lab/`, never in
-the existing read-only one.
+an existing one; both existing directories are read-only.
 The validator sets `UV_PROJECT_ENVIRONMENT` to its own interpreter prefix
 (`.runtime/venv`), so the `env -i` command above does not need to pass it.
 
 ## Recommended next action
 
 The five maintenance tasks are complete (see [current phase](#current-phase-and-priority)).
-There is no authorized next task. Wait for the user. Do not change adapter code
-or prepare a live probe. Keep the remaining ranked findings and execution
+The one code change since (`cb91e9c`) was a user-requested fix from the PR #1
+review and is revalidated. There is no authorized next task. Wait for the user. Do
+not change adapter code or prepare a live probe without a new request. Keep the remaining ranked findings and execution
 prerequisites visible. No date authorizes credential loading, exposure resets or
 live execution.
 
 Open decision for the user: `main` (`b199090`) ends at the Luna evaluation baseline
 (Phase 3B.8 and the viewer). Everything from `e3944fa` onward (paired comparison,
 generation adapter, this handoff and its maintenance) is only on
-`payments/bounded-generation-adapter-offline`, a fast-forward of `main`. Whether to
-merge it through a reviewed pull request is undecided. Do not open or merge one without approval.
+`payments/bounded-generation-adapter-offline`, a fast-forward of `main`. Pull request
+[#1](https://github.com/AlvLeoAI/Agentic-Payments-Lab/pull/1) was opened on
+2026-11-13 with the user's approval and is under review. Merging it is the user's
+decision: do not merge it, and do not push to it, without approval.

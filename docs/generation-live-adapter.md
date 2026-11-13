@@ -116,7 +116,9 @@ this preparation, documentation, testing or commit workflow.
 
 ## Offline verification
 
-On the unchanged adapter code, 61 focused tests passed and full validation passed
+After the nested-JSON credential-reflection fix (`cb91e9c`), full validation passed
+1,454 tests on 2026-11-13; see [handoff](handoff.md#verified-and-not-verified).
+Before that fix, 61 focused tests passed and full validation passed
 1,449 tests plus dependency, lint/format, repeated demos, evaluator and isolated
 viewer-server checks. Synthetic wire tests exercise request fencing, quality stops,
 usage/category uncertainty, interruptions, retained exposure, credential reflection,

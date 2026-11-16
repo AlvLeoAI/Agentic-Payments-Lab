@@ -19,7 +19,8 @@ payments are simulated; see the [README](../README.md) for scope and limits.
   Where no test asserts a requirement, the entry says "No direct test".
 - Test references are `file` and test name. Paths are relative to `tests/`.
 
-Status as of 2026-11-16, including the tests added in `da43583`.
+Status as of 2026-11-16, including the tests added in `da43583`. The latency
+requirements were added on the same date and have not been measured.
 
 ## Functional requirements
 
@@ -455,6 +456,200 @@ Direct tests:
 
 Limit: audit triggers are not tamper-proof against someone with filesystem access.
 
+### Latency
+
+Added 2026-11-16. These requirements bound how long a run may take and state what
+must be measured. No latency figure has been measured yet.
+
+- **Measurement boundary:** task start to run result returned.
+- **Principle:** latency optimizations must never weaken authorization, financial
+  correctness, idempotency or durable state guarantees, and must never introduce
+  retries.
+
+#### NFR-L1 Bounded wall time
+
+Every model and tool call has a timeout, and every task has an overall deadline.
+Wall time is bounded by the deadline plus the maximum duration of one in-flight
+step. No new step starts after the deadline. An in-flight payment call is never
+silently abandoned: if it is cut off, its outcome is recorded as unknown and the
+reservation stays held. On expiry the run stops fail-closed, without retry.
+
+The bound is "deadline plus one step", not "deadline", on purpose. Abandoning an
+in-flight payment call is worse than waiting for it: the outcome becomes unknown,
+and treating the call as stopped would be a correctness bug. The bound is
+enforceable only if every blocking step has its own limit, so lock waits have to be
+set from the remaining deadline and not fixed.
+
+What exists today:
+
+| Path | Overall deadline | Model call timeout | Tool call timeout |
+| --- | --- | --- | --- |
+| Buyer agent run (`run_buyer`), simulator and offline x402 | `Settings.timeout_seconds` around the model and tool loop. Default 30 s, maximum 120 s. | Live client: the same value, zero retries. Scripted or injected model: none of its own. | None of its own. |
+| Evaluation campaign, mock pilot, live pilot | The same run deadline, set from the envelope limit (at most 30 s). | Client timeout from the same limit. The live pilot transport also sets it on each HTTP phase. | None of its own. |
+| Paired comparison episode | `limits.timeout_seconds` (1 to 30 s) around the episode's requests and tool calls. | Client timeout, a per-request deadline on the live exchange, and 30 s per HTTP phase on the provider wire. | None of its own. |
+| Comparison preflight | None over the whole preflight. | 30 s per request, on the client, the exchange and the wire. | No tools. |
+| Generation probe, mock and live | None over the whole probe. | One deadline per provider request, from the probe limit. | No tools are executed. |
+| Simulator purchase without the agent (CLI `purchase`, the demo) | None. | No model. | Not applicable. |
+
+Two operator-invoked calls that are neither model nor tool calls are also bounded:
+x402 evidence observation and delivery retrieval each have a 1 to 30 s limit
+(default 5 s).
+
+Direct tests:
+
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_timeout_before_purchase_and_fabricated_success`: a model call that does not
+  return ends the run as `timeout`, and nothing is purchased.
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_failure_after_purchase_keeps_authoritative_state` (case `sleep_response`):
+  a deadline that expires after a purchase leaves it settled and delivered, with
+  one charge and usage marked incomplete.
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_input_and_settings_bounds`: a run timeout over 120 s is rejected.
+- [`test_agent_live_contract.py`](../tests/test_agent_live_contract.py)
+  `test_live_transport_is_bounded_and_ignores_proxy_and_base_url`: the live client
+  carries the configured timeout and zero retries.
+- [`test_call_budget.py`](../tests/test_call_budget.py)
+  `test_cooperative_timeout_holds_uncertain_request`: on expiry the model-usage
+  reservation stays held, further calls are blocked, and nothing is charged.
+- [`test_pilot_preparation.py`](../tests/test_pilot_preparation.py)
+  `test_timeout_retains_reservation`: the same for the mock pilot.
+- [`test_campaign_recovery.py`](../tests/test_campaign_recovery.py)
+  `test_timeout_and_late_cancelled_response_keep_unknown_usage`: one request is
+  sent, never a second, the campaign stops, and usage stays unknown.
+- [`test_comparison_recovery.py`](../tests/test_comparison_recovery.py)
+  `test_timeout_retains_generation_hold_and_no_retry`: one generation request, a
+  stopped comparison, and the full reservation still held.
+- [`test_comparison_live.py`](../tests/test_comparison_live.py)
+  `test_live_timeout_keeps_pending_attempt_and_stops_other_arm`: the same through
+  the guarded transport, and the other provider's arm does not start.
+- [`test_offline_buyer_recovery.py`](../tests/test_offline_buyer_recovery.py)
+  `test_late_response_cannot_claim_or_sign` (cases `timeout`): a deadline that
+  expires inside a tool call or a model call ends the run as `timeout`; a late
+  result cannot claim, sign or reserve.
+- [`test_offline_buyer_recovery.py`](../tests/test_offline_buyer_recovery.py)
+  `test_timeout_before_challenge_does_not_require_later_checkpoint`: a deadline
+  before the first response completes the run record as `timeout`.
+- [`test_comparison_preflight.py`](../tests/test_comparison_preflight.py)
+  `test_exact_native_preflight_requests_headers_admission_and_no_generation`: each
+  outbound preflight request carries the 30 s timeout on every HTTP phase.
+- [`test_agent_durability.py`](../tests/test_agent_durability.py)
+  `test_cancellation_cleanup_is_best_effort_and_bounded`: cleanup after a
+  cancelled run returns within two seconds when the client close stalls or the
+  store is locked.
+- [`test_x402_evidence.py`](../tests/test_x402_evidence.py)
+  `test_cooperative_timeout_keeps_reservation` and
+  [`test_x402_delivery_recovery.py`](../tests/test_x402_delivery_recovery.py)
+  `test_cooperative_timeout_records_failure_and_rejects_late_result`: the two
+  operator-invoked calls time out, keep the reservation or the settled accounting,
+  and reject a late result.
+
+For the payment-call clause, with a scripted adapter outcome and not an elapsed
+deadline:
+
+- [`test_recovery.py`](../tests/test_recovery.py)
+  `test_timeout_after_charge_is_reserved_until_reconciled` and
+  `test_unknown_requires_authoritative_resolution_and_fences_late_payment`: a
+  payment call that returns no usable answer, after or before the charge, is
+  recorded as `unknown` and the reservation stays held.
+
+No test lets the deadline expire while a payment call is in flight. In the offline
+x402 path, `test_cancellation_during_signing_keeps_claim_and_fences_late_signer`
+covers a cancellation during signing, not a deadline.
+
+Where the requirement is not met:
+
+- **No tool call has its own timeout.** `list_services`, `get_quote`, `purchase`
+  and `get_purchase_status` are bounded only by the run or episode deadline. The
+  in-process merchant client used by `get_quote` and `purchase` sets no timeout.
+- **Blocking steps are not bounded relative to the deadline.** The deadline takes
+  effect only where the code awaits. It cannot interrupt synchronous work: SQLite
+  calls on the ledger, the simulated payment store and the simulator's merchant
+  store, and the synchronous payment adapter call. Each of those database calls
+  has a fixed 30-second lock wait, and a purchase makes several in a row, so
+  "one in-flight step" has no defined maximum today.
+- **Nothing stops a new step from starting after the deadline.** Inside a
+  purchase, the reservation, the claim, the payment call and the settlement run
+  back to back without awaiting. The deadline is not consulted between them.
+- **The deadline does not cover the whole measurement boundary.** In `run_buyer`,
+  the catalog read and the start record happen before it starts; the final report,
+  the finish record and the client close happen after it. The close is limited to
+  0.5 s and the metadata store to a 0.1 s lock wait; the catalog read uses the
+  ledger's 30-second lock wait.
+- **The deadline is per run, not per task.** A task that is run again gets a new
+  deadline. No cumulative deadline exists for a task. This can wait: replay
+  returns the existing result, so a second run creates no new financial exposure.
+- **A purchase made without the agent has no deadline.**
+- **Scripted and injected models have no per-call timeout.** They run in process;
+  only the run deadline bounds them.
+- **Some timeouts exist with no test that they expire:** the generation probe's
+  per-request deadline (mock and live), the preflight's 30 s deadlines (only the
+  configured value is asserted), and the live pilot transport's per-phase timeout.
+  No test stalls a simulator tool call; the tool-call case above is the offline
+  x402 boundary.
+
+#### NFR-L2 Application overhead budget
+
+Non-model time per task (database, authorization, simulator) stays under 500 ms.
+This is a hypothesis to be measured, not a verified bound.
+
+No direct test. No test measures non-model time, and no code records it separately
+from model time.
+
+One informal observation suggests the budget is not safe on slow storage. On the
+development machine on 2026-11-16, a synced SQLite commit took 33 to 41 ms, and
+the two cases of `test_failure_after_purchase_keeps_authoritative_state`, which run
+a scripted purchase under a 1-second run deadline, failed there and took over two
+seconds each. Hosted CI passed the same tests. The cause is not confirmed, and this
+is not a measurement of the budget.
+
+#### NFR-L3 Model latency is measured, not guaranteed
+
+Live runs record total task time, per-call model duration, number of sequential
+model calls, tokens and outcome. Results are reported as median and maximum over
+the scenario set. The threshold belongs in the provider decision rule.
+
+No direct test. What existing live evidence and the current code record:
+
+| Field | Published live evidence | Recorded by current code |
+| --- | --- | --- |
+| Total task time | Missing. The bundled pilot snapshot and [luna-baseline.md](luna-baseline.md) contain no timing. | Partly. The campaign runner stores `latency_ms` per entry and the comparison runner stores `latency_seconds` with a `latency_scope`. Both include host tools and persistence. The agent report, the live pilot and the generation probe record none. |
+| Per-call model duration | Missing. | Missing everywhere. |
+| Number of sequential model calls | Recorded. The pilot snapshot lists each request by ordinal; the baseline reports request counts. | Recorded (`requests_started`, `responses_received`). |
+| Tokens | Recorded, per request and per scenario in the pilot snapshot, and in total in the baseline. | Recorded. |
+| Outcome | Recorded (`termination`, `decision`, payment and delivery state). | Recorded. |
+| Median and maximum over the scenario set | Missing. | Missing. No aggregation exists. |
+| Threshold in the provider decision rule | Missing. The rule is not written. | Missing. |
+
+The published live evidence read here is the bundled pilot snapshot
+(`pilot_viewer/pilot-v1.json`), [luna-baseline.md](luna-baseline.md) and
+[phase3b8.md](phase3b8.md). The original campaign and pilot databases were not
+opened, so whether the Luna campaign's stored entries carry `latency_ms` is not
+confirmed. No paired comparison generation has been run against a provider, so
+`latency_seconds` exists only for mock runs.
+
+#### Out of scope for now
+
+- **P99 targets:** the sample size is too small for a tail percentile to mean
+  anything.
+- **Throughput and concurrency targets:** a run has a single owner process.
+- **Acknowledgment latency:** there is no asynchronous acceptance to acknowledge.
+- **Reconciliation latency:** reconciliation is operator-invoked and is a
+  correctness property, not a speed target.
+- **Delivery latency:** delivery is simulated and synchronous.
+
+#### Lock wait and latency targets
+
+The ledger, the simulated payment store and the simulator's merchant store wait up
+to 30 seconds for a database lock. The agent metadata, call budget, comparison and
+x402 stores already use short waits of 0.1 to 0.2 seconds.
+
+With one owner process the 30-second wait is not expected to be reached. NFR-L1
+still requires these waits to be derived from the remaining deadline, because a
+fixed 30 seconds is as long as the default run deadline. If concurrent writers are
+ever introduced, the lock wait must be revisited together with the latency
+targets: a single blocked write could then consume a whole run deadline.
+
 ## Gaps
 
 | # | Requirement | Gap |
@@ -467,7 +662,29 @@ Limit: audit triggers are not tamper-proof against someone with filesystem acces
 | 6 | NFR-3 | No pytest test asserts network isolation. It relies on a fixture and the validator. |
 | 7 | NFR-4 | No test of the clock itself, and none that financial decisions never read wall-clock time. |
 | 8 | FR-14, FR-15 | Not implemented. FR-14's mechanism is undecided. |
+| 9 | NFR-L1 | No tool call has its own timeout, and the in-process merchant client sets none. Only the run or episode deadline bounds a tool call. |
+| 10 | NFR-L1 | Blocking steps are not bounded relative to the deadline: lock waits are a fixed 30 seconds and the payment adapter call is synchronous. Nothing stops a new step inside a purchase from starting after the deadline. No test lets the deadline expire during a payment call. |
+| 11 | NFR-L1 | The deadline covers the model and tool loop only, not setup or finalization. It is per run, not per task, and a purchase made without the agent has none. The per-run part can wait, because replay creates no new exposure. |
+| 12 | NFR-L1 | The generation probe's per-request deadline, the preflight's 30 s deadlines and the live pilot transport's timeout have no test that they expire. No test stalls a simulator tool call. |
+| 13 | NFR-L2 | Not measured and not tested. No code separates non-model time from model time. |
+| 14 | NFR-L3 | Per-call model duration is recorded nowhere. Total task time is recorded only by the campaign and comparison runners, and no published live evidence contains it. |
+| 15 | NFR-L3 | No median or maximum over a scenario set, and no latency threshold, because the provider decision rule is not written. |
 
 Gaps 1, 2, 4 and 5 are closed and keep their numbers so the others stay stable.
 Gap 7 is a small test addition. Gaps 3 and 6 are limits of what a unit test can
-show. Gap 8 is planned work.
+show. Gap 8 is planned work. Gaps 9 to 15 were added with the latency requirements
+on 2026-11-16.
+
+Planned order for the latency gaps, as three separate tasks:
+
+1. **Gaps 14 and 15:** record per-call model duration and total task time in the
+   comparison runner. This blocks the comparison, because latency is a
+   decision-rule criterion and the runner cannot measure it today.
+2. **Gaps 10 and 12:** bound the blocking steps by deriving lock waits from the
+   remaining deadline, and add expiry tests for the three timeouts that are
+   configured but never tested.
+3. **Gap 9:** per-tool timeouts on the merchant client. The risk is low while the
+   merchant is in process. It is mandatory before the x402 phase introduces real
+   HTTP.
+
+Gap 13 is measured with the scenario set. Gap 11 is not scheduled.

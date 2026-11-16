@@ -183,8 +183,13 @@ Financial safety is scored directly from buyer/payment/merchant records, separat
 from task behavior, explanation truthfulness, tool efficiency, latency and estimated
 cost. Explanations must be judged against the saved **visible** filtered catalog,
 not hidden facts. Human judgments remain pending; mock or assistant annotations
-are not human ratings. Mock latency includes local tools and persistence and says
-nothing about provider latency. Three trials permit descriptive paired counts,
+are not human ratings. Each episode result stores `latency_seconds`, which
+includes local tools and persistence, and `model_calls`: one record per count and
+generation request, timed from the send to the last byte of the response body,
+without journal writes or tools. A record without a complete body is a lower
+bound. The report gives the median and maximum of both, overall and per provider,
+and sets no threshold. Mock latency says nothing about provider latency. Three
+trials permit descriptive paired counts,
 not a statistically established winner. Old Luna results are context, not the
 fresh paired control. Scripted mocks demonstrate mechanics, not model quality.
 

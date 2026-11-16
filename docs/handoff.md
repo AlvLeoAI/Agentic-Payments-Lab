@@ -99,7 +99,10 @@ rendering are not part of this local evidence.
 Since `cb91e9c`, `d36e9d7` added three regression tests and corrected one comment
 in `comparison_wire.py`, `1912ca2` made one existing concurrency test
 independent of SQLite lock-wait timing, and `da43583` added contract tests for
-three requirement gaps; no runtime behavior changed. None has a retained local
+three requirement gaps; none of these changed runtime behavior. `de0c8d0` does:
+the paired comparison now stores per-call model duration in each episode result
+and reports its median and maximum. It changes no authorization, payment or
+admission path, and the journal schema is unchanged. None has a retained local
 evidence run of its own: hosted CI runs the full isolated suite on each pull
 request. Every other change since `cb91e9c` is documentation or the
 CI job timeout. To check, run `git diff --stat cb91e9c..HEAD`.

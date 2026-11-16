@@ -19,8 +19,9 @@ payments are simulated; see the [README](../README.md) for scope and limits.
   Where no test asserts a requirement, the entry says "No direct test".
 - Test references are `file` and test name. Paths are relative to `tests/`.
 
-Status as of 2026-11-16, including the tests added in `da43583`. The latency
-requirements were added on the same date and have not been measured.
+Status as of 2026-11-16, including the tests added in `da43583` and the comparison
+call timing added in `de0c8d0`. The latency requirements were added on the same
+date and have not been measured.
 
 ## Functional requirements
 
@@ -609,24 +610,58 @@ Live runs record total task time, per-call model duration, number of sequential
 model calls, tokens and outcome. Results are reported as median and maximum over
 the scenario set. The threshold belongs in the provider decision rule.
 
-No direct test. What existing live evidence and the current code record:
+Direct tests, for the paired comparison runner only. They use a scripted clock, so
+they assert which spans are recorded, not how long anything takes:
+
+- [`test_comparison_latency.py`](../tests/test_comparison_latency.py)
+  `test_call_durations_exclude_host_time_and_are_summarised`: each episode result
+  stores one record per count and generation request. A record's duration covers
+  the send up to the last byte of the response body. Journal writes and tool calls
+  are in the task time and not in any call's duration. The report gives the median
+  and maximum, overall and per provider.
+- [`test_comparison_latency.py`](../tests/test_comparison_latency.py)
+  `test_call_cut_off_by_the_deadline_is_recorded_as_a_lower_bound`: a call that
+  the episode deadline cuts off is kept, marked as having no complete body, and
+  counted in the report.
+- [`test_comparison_latency.py`](../tests/test_comparison_latency.py)
+  `test_live_call_duration_excludes_the_dispatch_claim_and_status_commits`: through
+  the guarded transport, with the network replaced, the duration excludes the
+  dispatch claim before the send and the status commit after it. A dispatch that
+  is refused before the send is not recorded as a call.
+- [`test_comparison_latency.py`](../tests/test_comparison_latency.py)
+  `test_results_without_call_timing_are_counted_not_guessed`: results stored
+  before call timing existed are counted as not measured.
+
+What existing live evidence and the current code record:
 
 | Field | Published live evidence | Recorded by current code |
 | --- | --- | --- |
 | Total task time | Missing. The bundled pilot snapshot and [luna-baseline.md](luna-baseline.md) contain no timing. | Partly. The campaign runner stores `latency_ms` per entry and the comparison runner stores `latency_seconds` with a `latency_scope`. Both include host tools and persistence. The agent report, the live pilot and the generation probe record none. |
-| Per-call model duration | Missing. | Missing everywhere. |
-| Number of sequential model calls | Recorded. The pilot snapshot lists each request by ordinal; the baseline reports request counts. | Recorded (`requests_started`, `responses_received`). |
+| Per-call model duration | Missing. | Comparison runner only: `model_calls` in each episode result, one record per count and generation request, with `kind`, `seconds` and `body_read`. Missing in the agent report, the campaign runner, the live pilot and the generation probe. |
+| Number of sequential model calls | Recorded. The pilot snapshot lists each request by ordinal; the baseline reports request counts. | Recorded (`requests_started`, `responses_received`). The comparison report also gives generation calls per episode. |
 | Tokens | Recorded, per request and per scenario in the pilot snapshot, and in total in the baseline. | Recorded. |
 | Outcome | Recorded (`termination`, `decision`, payment and delivery state). | Recorded. |
-| Median and maximum over the scenario set | Missing. | Missing. No aggregation exists. |
+| Median and maximum over the scenario set | Missing. | Comparison report only: its `latency` block gives count, median and maximum of task time, generation call duration, count call duration and generation calls per episode, overall and per provider. |
 | Threshold in the provider decision rule | Missing. The rule is not written. | Missing. |
+
+The comparison's `latency_seconds` is narrower than the measurement boundary above.
+It starts after the episode is claimed and its fixture is opened, and it ends
+before the result is stored. It therefore leaves out the source and state
+verification that claims the episode, and the final result commit. It includes
+the harness's closing checks. Task time minus the call durations is the
+comparison's non-model time, but that includes the comparison journal's own
+writes, so it is not the NFR-L2 figure.
+
+The report's median and maximum cover every episode that sent at least one model
+call, including one that stopped early. A call without a complete body is a lower
+bound, and the report counts such calls in `unread_calls`.
 
 The published live evidence read here is the bundled pilot snapshot
 (`pilot_viewer/pilot-v1.json`), [luna-baseline.md](luna-baseline.md) and
 [phase3b8.md](phase3b8.md). The original campaign and pilot databases were not
 opened, so whether the Luna campaign's stored entries carry `latency_ms` is not
 confirmed. No paired comparison generation has been run against a provider, so
-`latency_seconds` exists only for mock runs.
+`latency_seconds` and `model_calls` exist only for mock runs.
 
 #### Out of scope for now
 
@@ -667,19 +702,20 @@ targets: a single blocked write could then consume a whole run deadline.
 | 11 | NFR-L1 | The deadline covers the model and tool loop only, not setup or finalization. It is per run, not per task, and a purchase made without the agent has none. The per-run part can wait, because replay creates no new exposure. |
 | 12 | NFR-L1 | The generation probe's per-request deadline, the preflight's 30 s deadlines and the live pilot transport's timeout have no test that they expire. No test stalls a simulator tool call. |
 | 13 | NFR-L2 | Not measured and not tested. No code separates non-model time from model time. |
-| 14 | NFR-L3 | Per-call model duration is recorded nowhere. Total task time is recorded only by the campaign and comparison runners, and no published live evidence contains it. |
-| 15 | NFR-L3 | No median or maximum over a scenario set, and no latency threshold, because the provider decision rule is not written. |
+| 14 | NFR-L3 | Closed in `de0c8d0` for the paired comparison runner, which records per-call model duration and total task time. Still open elsewhere: the agent report, the live pilot and the generation probe record no timing, the campaign runner records no per-call duration, and no published live evidence contains either. |
+| 15 | NFR-L3 | Partly closed in `de0c8d0`: the comparison report gives the median and maximum, overall and per provider. Still open: no latency threshold, because the provider decision rule is not written. |
 
 Gaps 1, 2, 4 and 5 are closed and keep their numbers so the others stay stable.
 Gap 7 is a small test addition. Gaps 3 and 6 are limits of what a unit test can
 show. Gap 8 is planned work. Gaps 9 to 15 were added with the latency requirements
-on 2026-11-16.
+on 2026-11-16. Gap 14 is closed for the comparison runner only, and gap 15 still
+lacks its threshold.
 
 Planned order for the latency gaps, as three separate tasks:
 
 1. **Gaps 14 and 15:** record per-call model duration and total task time in the
-   comparison runner. This blocks the comparison, because latency is a
-   decision-rule criterion and the runner cannot measure it today.
+   comparison runner. Done for the comparison runner in `de0c8d0`. The threshold
+   waits for the provider decision rule.
 2. **Gaps 10 and 12:** bound the blocking steps by deriving lock waits from the
    remaining deadline, and add expiry tests for the three timeouts that are
    configured but never tested.

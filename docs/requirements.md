@@ -126,8 +126,9 @@ Direct tests:
 
 #### FR-6 Explain the decision
 
-The agent's explanation is untrusted text, kept separate from the application-owned
-decision record.
+The explanation is returned in the run report as untrusted text and is excluded
+from durable storage. The application-owned decision record is the authoritative
+audit source.
 
 Direct tests:
 
@@ -142,10 +143,13 @@ Direct tests:
 - [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
   `test_invalid_model_output`: an explanation over 1,000 characters is rejected.
 
-Note on wording: the buyer's explanation is returned in the run report, not stored.
-The agent store excludes `model_explanation` on purpose, and the first test above
-asserts that. If FR-6 should require the explanation to be stored, that is a change
-to the current behavior.
+Why it is not stored: the explanation is post-hoc model text. It can carry injected
+content, and it does not reliably reflect why the model acted. The agent store
+excludes `model_explanation` on purpose, and the first test above asserts that.
+
+Future decision, not a gap: if audit-grade explanations are ever required, they
+would be stored sanitized and length-bounded, and checked for credentials at the
+same persistence boundary as `check_decoded`.
 
 ### Application and payment authority
 
@@ -439,11 +443,12 @@ Limit: audit triggers are not tamper-proof against someone with filesystem acces
 | 1 | FR-1 | No test that an existing grant cannot be replaced with different contents. |
 | 2 | FR-3 | No test of what `list_services` returns to the model. Eligibility is only tested at quote time. |
 | 3 | FR-3 to FR-6 | Tests use scripted models. Real-model behavior rests on a few bounded runs, and their explanation review is pending. |
-| 4 | FR-6 | The explanation is returned, not stored. The requirement's wording and the behavior should be reconciled. |
+| 4 | FR-6 | Closed. The requirement now states the behavior: returned in the report, excluded from storage. |
 | 5 | FR-12, NFR-5 | Append-only is asserted for `DELETE` only, not `UPDATE`, and only on the simulator ledger. |
 | 6 | NFR-3 | No pytest test asserts network isolation. It relies on a fixture and the validator. |
 | 7 | NFR-4 | No test of the clock itself, and none that financial decisions never read wall-clock time. |
 | 8 | FR-14, FR-15 | Not implemented. FR-14's mechanism is undecided. |
 
-Gaps 1, 2, 5 and 7 are small test additions. Gap 4 is a wording decision. Gaps 3
-and 6 are limits of what a unit test can show. Gap 8 is planned work.
+Gaps 1, 2, 5 and 7 are small test additions. Gap 4 is closed and keeps its number
+so the others stay stable. Gaps 3 and 6 are limits of what a unit test can show.
+Gap 8 is planned work.

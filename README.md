@@ -50,6 +50,8 @@ As of 2026-11-13:
 
 These hold within the documented assumptions: one operator, one host, retained and
 consistent local SQLite state. See [Limits and next phase](#limits-and-next-phase).
+The [requirements](docs/requirements.md) list each one by owner, with the tests
+that assert it and the gaps that remain.
 
 ## Milestones
 

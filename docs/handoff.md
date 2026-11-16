@@ -7,6 +7,8 @@
 - Use the [offline reproduction procedure](#offline-test-reproduction-writes-temporary-fixtureslogs-not-read-only) only for an authorized run:
   ask the user in chat before each run, offline pytest included (~30 min, writes temporary fixtures).
 - Review the [remaining findings and editorial correction](#ranked-findings-and-current-disposition).
+- For what the lab must do, which tests assert it and which gaps remain, read
+  [requirements.md](requirements.md).
 - Stop after the scoped maintenance: no live probe, real payments or deployment.
   "Stop" means: make no further commits or changes outside a task the user gives in
   chat. Claude Code sessions also load the hard rules in the repository-root `CLAUDE.md`.

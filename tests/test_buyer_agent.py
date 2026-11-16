@@ -8,7 +8,7 @@ from agents import Model
 from conftest import authorize
 from pydantic import ValidationError
 
-from agentic_payments_lab.buyer_agent.boundary import Boundary
+from agentic_payments_lab.buyer_agent.boundary import QUALITY, Boundary
 from agentic_payments_lab.buyer_agent.contracts import Goal, Settings
 from agentic_payments_lab.buyer_agent.runner import run_buyer
 from agentic_payments_lab.buyer_agent.scripted import ScriptedBuyer, final_response, tool_response
@@ -251,6 +251,119 @@ def test_application_enforces_cheapest_and_quality(runtime, tmp_path):
         )
         assert result.events[0].outcome == "service_not_eligible"
     assert authority(runtime) == (0, 0, 0)
+
+
+def catalog_view(runtime, tmp_path, *, goal=GOAL, session=None):
+    """The list_services result exactly as the next model request carries it."""
+    model = SequenceModel([tool_response("list_services", {}, "list"), final_response("done")])
+    asyncio.run(
+        run_buyer(
+            session or runtime.buyer("task"),
+            initialized_store(runtime, tmp_path, goal),
+            goal,
+            Settings(),
+            model=model,
+        )
+    )
+    return last_output(model.inputs[1]), model
+
+
+def test_catalog_view_exposes_only_trusted_terms(runtime, tmp_path, monkeypatch):
+    authorize(runtime)
+    session = runtime.buyer("task")
+    sentinel = "INTERNAL-FIELD-MUST-NOT-REACH-THE-MODEL"
+    visible = {"service_id", "quality", "amount"}
+    internal = set(session.list_services()[0]) - visible
+    assert {"description", "recipient", "merchant_id", "request_schema"} <= internal
+    services = [
+        {**{name: sentinel for name in internal}, **{name: service[name] for name in visible}}
+        for service in session.list_services()
+    ]
+    monkeypatch.setattr(session, "list_services", lambda: services)
+    view, model = catalog_view(runtime, tmp_path, session=session)
+    assert set(view) == {
+        "services",
+        "recommended_service_id",
+        "reason",
+        "available_atomic",
+        "per_purchase_limit_atomic",
+        "required_quality",
+    }
+    assert view["services"]
+    for service in view["services"]:
+        assert set(service) == {"service_id", "quality", "amount_atomic"}
+    for request in model.inputs:
+        assert sentinel not in json.dumps(request["input"])
+
+
+@pytest.mark.parametrize(
+    ("case", "present", "absent"),
+    [
+        ("quality", {"report-standard", "report-premium"}, {"report-free"}),
+        ("basic", {"report-free", "report-standard", "report-premium"}, set()),
+        ("cap", {"report-standard"}, {"report-free", "report-premium"}),
+        ("scope", {"report-standard"}, {"report-free", "report-premium"}),
+        ("remaining_budget", {"report-standard"}, {"report-free", "report-premium"}),
+        ("purpose", set(), {"report-free", "report-standard", "report-premium"}),
+        ("revoked", set(), {"report-free", "report-standard", "report-premium"}),
+        ("expired", set(), {"report-free", "report-standard", "report-premium"}),
+    ],
+)
+def test_catalog_view_lists_only_eligible_services(runtime, tmp_path, case, present, absent):
+    authorize(
+        runtime,
+        cap=10_000 if case == "cap" else 30_000,
+        services=("report-free", "report-standard")
+        if case == "scope"
+        else ("report-free", "report-standard", "report-premium"),
+    )
+    goal = (
+        GOAL.model_copy(update={"quality": "basic"} if case == "basic" else {"purpose": "other"})
+        if case in ("basic", "purpose")
+        else GOAL
+    )
+    if case == "remaining_budget":
+        # Another task on the same grant spends 30,000 of 40,000 first.
+        runtime.ledger.create_task("spender", "grant", runtime.clock.now())
+        premium = PurchaseRequest(service_id="report-premium", subject="spent", purpose="research")
+        quote = asyncio.run(runtime.coordinator.quote(premium))
+        spent = asyncio.run(runtime.coordinator.purchase("spender", premium, quote))
+        assert spent.payment_state == "settled"
+    if case == "revoked":
+        runtime.ledger.revoke_grant("grant", runtime.clock.now())
+    if case == "expired":
+        runtime.clock.advance(3600)
+    view, _ = catalog_view(runtime, tmp_path, goal=goal)
+    listed = {service["service_id"] for service in view["services"]}
+    assert present <= listed and absent.isdisjoint(listed)
+    # The rule itself, stated on whatever is listed, so a new catalog entry cannot hide.
+    limit = min(view["per_purchase_limit_atomic"], view["available_atomic"])
+    for service in view["services"]:
+        assert service["amount_atomic"] <= limit
+        assert QUALITY[service["quality"]] >= QUALITY[view["required_quality"]]
+    assert view["required_quality"] == goal.quality
+    if listed:
+        assert view["reason"] == "eligible"
+        assert view["recommended_service_id"] == view["services"][0]["service_id"]
+    else:
+        assert view["reason"] == "no_suitable_service"
+        assert view["recommended_service_id"] is None
+
+
+def test_catalog_view_order_is_deterministic(runtime, tmp_path, monkeypatch):
+    authorize(runtime)
+    goal = GOAL.model_copy(update={"quality": "basic"})
+    first, _ = catalog_view(runtime, tmp_path, goal=goal)
+    assert len(first["services"]) > 1
+    assert first["services"] == sorted(
+        first["services"], key=lambda service: (service["amount_atomic"], service["service_id"])
+    )
+    session = runtime.buyer("task")
+    reordered = list(reversed(session.list_services()))
+    assert reordered != session.list_services()
+    monkeypatch.setattr(session, "list_services", lambda: reordered)
+    again, _ = catalog_view(runtime, tmp_path, goal=goal, session=session)
+    assert again == first
 
 
 @pytest.mark.parametrize("fault", ["unknown", "delivery"])

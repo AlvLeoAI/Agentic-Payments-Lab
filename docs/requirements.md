@@ -19,7 +19,7 @@ payments are simulated; see the [README](../README.md) for scope and limits.
   Where no test asserts a requirement, the entry says "No direct test".
 - Test references are `file` and test name. Paths are relative to `tests/`.
 
-Status as of 2026-11-15, at `main` commit `ba125c5`.
+Status as of 2026-11-16, including the tests added in `da43583`.
 
 ## Functional requirements
 
@@ -48,9 +48,13 @@ Direct tests:
 - [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
   `test_administrative_tools_are_unavailable`: a model call to `grant` or
   `create_task` ends the run as an unavailable tool, with no authority activity.
-
-No direct test: that an existing grant cannot be replaced with different contents
-(`Ledger.add_grant` raises `PurchaseConflict`).
+- [`test_authorization.py`](../tests/test_authorization.py)
+  `test_existing_grant_cannot_be_replaced_with_different_contents`: a grant with a
+  different budget, cap, expiry, service list, purpose or operator is rejected,
+  and the stored grant and budget are unchanged.
+- [`test_authorization.py`](../tests/test_authorization.py)
+  `test_resubmitting_identical_grant_is_idempotent`: an identical grant is accepted
+  without resetting spent budget or adding a second creation event.
 
 #### FR-2 Bind the request
 
@@ -81,10 +85,22 @@ FR-3 to FR-6 are model-dependent. See "How to read this".
 
 The agent discovers eligible services from the operator-approved catalog.
 
-No direct test. No test asserts that the `list_services` tool returns only the
-services that meet the grant, the bound quality and the remaining budget
-(`Boundary.catalog`). Eligibility is enforced again when a quote is requested, and
-that is tested under FR-4.
+Direct tests, on the `list_services` result as the next model request carries it:
+
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_catalog_view_lists_only_eligible_services`: across eight cases (two bound
+  qualities, cap, granted services, remaining budget, purpose, revoked, expired)
+  only services that meet the grant, the bound quality and the remaining budget
+  are listed, and an empty list carries the reason `no_suitable_service`.
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_catalog_view_exposes_only_trusted_terms`: each service has exactly
+  `service_id`, `quality` and `amount_atomic`, and internal catalog fields such as
+  the description, recipient and schemas reach no model request.
+- [`test_buyer_agent.py`](../tests/test_buyer_agent.py)
+  `test_catalog_view_order_is_deterministic`: services are ordered by price, then
+  identifier, whatever the catalog's own order.
+
+Eligibility is enforced again when a quote is requested; that is tested under FR-4.
 
 #### FR-4 Select or decline
 
@@ -281,9 +297,10 @@ Direct tests:
 - [`test_concurrency.py`](../tests/test_concurrency.py)
   `test_audit_export_keeps_one_snapshot_during_reconciliation`: an export that
   overlaps a reconciliation describes one consistent snapshot.
-
-No direct test: that an `UPDATE` on events is rejected. The schema has a trigger
-for it, but only `DELETE` is asserted.
+- [`test_authorization.py`](../tests/test_authorization.py)
+  `test_audit_events_cannot_be_rewritten`: an `UPDATE` of any column of an audit
+  event is rejected through a plain database connection, and the trail is
+  unchanged.
 
 #### FR-13 Account for model usage
 
@@ -424,6 +441,8 @@ Direct tests:
 - [`test_authorization.py`](../tests/test_authorization.py)
   `test_audit_is_sanitized_and_append_only`: deletion is rejected and the export is
   sanitized.
+- [`test_authorization.py`](../tests/test_authorization.py)
+  `test_audit_events_cannot_be_rewritten`: rewriting an event is rejected.
 - [`test_concurrency.py`](../tests/test_concurrency.py)
   `test_audit_export_keeps_one_snapshot_during_reconciliation`: one snapshot under
   a concurrent write.
@@ -440,15 +459,15 @@ Limit: audit triggers are not tamper-proof against someone with filesystem acces
 
 | # | Requirement | Gap |
 | --- | --- | --- |
-| 1 | FR-1 | No test that an existing grant cannot be replaced with different contents. |
-| 2 | FR-3 | No test of what `list_services` returns to the model. Eligibility is only tested at quote time. |
+| 1 | FR-1 | Closed in `da43583`. Identical resubmission and replacement are both tested. |
+| 2 | FR-3 | Closed in `da43583`. The model's view of `list_services` is tested. |
 | 3 | FR-3 to FR-6 | Tests use scripted models. Real-model behavior rests on a few bounded runs, and their explanation review is pending. |
 | 4 | FR-6 | Closed. The requirement now states the behavior: returned in the report, excluded from storage. |
-| 5 | FR-12, NFR-5 | Append-only is asserted for `DELETE` only, not `UPDATE`, and only on the simulator ledger. |
+| 5 | FR-12, NFR-5 | Closed in `da43583` for the simulator ledger. The x402 stores test immutability of their own tables; their audit event tables were not reviewed here. |
 | 6 | NFR-3 | No pytest test asserts network isolation. It relies on a fixture and the validator. |
 | 7 | NFR-4 | No test of the clock itself, and none that financial decisions never read wall-clock time. |
 | 8 | FR-14, FR-15 | Not implemented. FR-14's mechanism is undecided. |
 
-Gaps 1, 2, 5 and 7 are small test additions. Gap 4 is closed and keeps its number
-so the others stay stable. Gaps 3 and 6 are limits of what a unit test can show.
-Gap 8 is planned work.
+Gaps 1, 2, 4 and 5 are closed and keep their numbers so the others stay stable.
+Gap 7 is a small test addition. Gaps 3 and 6 are limits of what a unit test can
+show. Gap 8 is planned work.

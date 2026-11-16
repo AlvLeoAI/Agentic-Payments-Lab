@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+from contextlib import closing
 
 import pytest
 from conftest import authorize
@@ -238,6 +239,75 @@ def test_audit_is_sanitized_and_append_only(prepared):
     with pytest.raises(sqlite3.IntegrityError, match="append-only"):
         with runtime.ledger.db.transaction() as db:
             db.execute("DELETE FROM events")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE events SET data='{}'",
+        "UPDATE events SET event_type='settled'",
+        "UPDATE events SET purchase_id='another-purchase'",
+        "UPDATE events SET recorded_at=0",
+        "UPDATE events SET sequence=sequence+1000",
+    ],
+)
+def test_audit_events_cannot_be_rewritten(prepared, statement):
+    runtime, _, _ = prepared
+    buy(*prepared)
+    before = runtime.ledger.audit()
+    assert before
+    # A plain connection: the database refuses the rewrite, not an application helper.
+    with closing(sqlite3.connect(runtime.ledger.db.path)) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            db.execute(statement)
+        db.rollback()
+    assert runtime.ledger.audit() == before
+
+
+def stored_grant(runtime):
+    return runtime.ledger.buyer_constraints("grant", runtime.clock.now()).grant
+
+
+def grant_events(runtime):
+    return [event for event in runtime.ledger.audit() if event["event_type"] == "grant_created"]
+
+
+def test_resubmitting_identical_grant_is_idempotent(prepared):
+    runtime, _, _ = prepared
+    grant = stored_grant(runtime)
+    buy(*prepared)  # Spend first: a retried submission must not reset the accounting.
+    budget = runtime.ledger.budget("grant")
+    assert budget.spent == 10_000
+    runtime.clock.advance(1)
+    runtime.ledger.add_grant(grant, runtime.clock.now())
+    assert stored_grant(runtime) == grant
+    assert runtime.ledger.budget("grant") == budget
+    assert len(grant_events(runtime)) == 1
+
+
+@pytest.mark.parametrize(
+    "field", ["budget", "per_purchase_limit", "expires_at", "service_ids", "purpose", "operator_id"]
+)
+def test_existing_grant_cannot_be_replaced_with_different_contents(prepared, field):
+    runtime, _, _ = prepared
+    grant = stored_grant(runtime)
+    replacement = grant.model_copy(
+        update={
+            "budget": {"budget": grant.budget * 2},
+            "per_purchase_limit": {"per_purchase_limit": grant.per_purchase_limit + 1},
+            "expires_at": {"expires_at": grant.expires_at + 3600},
+            "service_ids": {"service_ids": grant.service_ids[:1]},
+            "purpose": {"purpose": "other"},
+            "operator_id": {"operator_id": "another-operator"},
+        }[field]
+    )
+    assert replacement != grant
+    budget = runtime.ledger.budget("grant")
+    with pytest.raises(PurchaseConflict):
+        runtime.ledger.add_grant(replacement, runtime.clock.now())
+    assert stored_grant(runtime) == grant
+    assert runtime.ledger.budget("grant") == budget
+    assert len(grant_events(runtime)) == 1
 
 
 def test_instruction_like_content_is_inert(runtime, request_data):

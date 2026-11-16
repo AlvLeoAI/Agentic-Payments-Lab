@@ -46,6 +46,7 @@ class MockExchange(httpx2.AsyncBaseTransport):
         self.request_id = None
         self.count_id = None
         self.counting = False
+        self.calls = []
 
     async def handle_async_request(self, request):
         provider = self.entry["provider"]
@@ -88,21 +89,28 @@ class MockExchange(httpx2.AsyncBaseTransport):
         try:
             if asyncio.current_task().cancelling():
                 raise asyncio.CancelledError
-            response = await self._wire.handle_async_request(wire_request)
-            if (
-                response.status_code != 200
-                or response.headers.get("content-encoding", "identity") != "identity"
-            ):
-                raise ValueError
-            raw = bytearray()
-            # Read the raw identity-encoded stream without implicit early close:
-            # observed usage must commit before a later close failure can occur.
-            async for chunk in response.stream:
-                if asyncio.current_task().cancelling():
-                    raise asyncio.CancelledError
-                if len(raw) + len(chunk) > (4096 if self.counting else 65_536):
+            call = {"kind": "count" if self.counting else "generation", "body_read": False}
+            sent, received = time.monotonic(), None
+            try:
+                response = await self._wire.handle_async_request(wire_request)
+                received = time.monotonic()
+                if (
+                    response.status_code != 200
+                    or response.headers.get("content-encoding", "identity") != "identity"
+                ):
                     raise ValueError
-                raw.extend(chunk)
+                raw = bytearray()
+                # Read the raw identity-encoded stream without implicit early close:
+                # observed usage must commit before a later close failure can occur.
+                async for chunk in response.stream:
+                    if asyncio.current_task().cancelling():
+                        raise asyncio.CancelledError
+                    if len(raw) + len(chunk) > (4096 if self.counting else 65_536):
+                        raise ValueError
+                    raw.extend(chunk)
+                call["body_read"] = True
+            finally:
+                self._clock_call(call, sent, received)
             try:
                 payload = json.loads(raw, object_pairs_hook=_unique_fields)
             except (ValueError, UnicodeDecodeError):
@@ -138,6 +146,24 @@ class MockExchange(httpx2.AsyncBaseTransport):
                 except Exception:
                     self._stop()
                     raise BudgetDenied("comparison_close_failed") from None
+
+    def _clock_call(self, call, sent, received):
+        """Provider time only: send to the last body byte, no journal write or tool.
+
+        A live wire reports its own send-to-headers span, because it commits a
+        dispatch claim before the send and the status after it. A dispatch it
+        refused was never sent and is not a call. Without a complete body the
+        span is a lower bound on the call, not its duration.
+        """
+        ended = time.monotonic()
+        if hasattr(self._wire, "network_seconds"):
+            to_headers = self._wire.network_seconds
+            if to_headers is None:
+                return
+        else:
+            to_headers = (ended if received is None else received) - sent
+        body = 0 if received is None else ended - received
+        self.calls.append({**call, "seconds": round(to_headers + body, 6)})
 
     def _stop(self):
         try:
@@ -373,6 +399,8 @@ async def _episode(comparison, entry, responder, *, model_factory=NativeMockMode
                 "model_explanation": explanation,
                 "explanation_sanitization": sanitization,
                 "visible_transcript": transcript,
+                "model_calls": list(model.exchange.calls) if model is not None else [],
+                "model_call_scope": "send_to_response_body_read_excluding_journal_and_tools",
                 "latency_seconds": round(time.monotonic() - started, 6),
                 "latency_scope": (
                     "offline_mock_including_host_tools_and_persistence"

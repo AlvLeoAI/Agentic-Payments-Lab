@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+import time
 
 import httpx2
 from pydantic import SecretStr
@@ -102,6 +103,7 @@ class ProviderWire(httpx2.AsyncBaseTransport):
         self.provider, self.authority = provider, authority
         self._key, self._wire = key, wire
         self.claim = None
+        self.network_seconds = None
 
     def check_payload(self, raw, payload):
         secret = self._key.get_secret_value()
@@ -141,6 +143,7 @@ class ProviderWire(httpx2.AsyncBaseTransport):
     @quiet_wire
     async def handle_async_request(self, request):
         reject_ambient_headers()
+        self.network_seconds = None  # Stays unset when the dispatch is refused before a send.
         provider = self.provider
         allowed = {
             ("GET", MODEL_ENDPOINTS[provider]),
@@ -182,7 +185,13 @@ class ProviderWire(httpx2.AsyncBaseTransport):
         try:
             if asyncio.current_task().cancelling():
                 raise asyncio.CancelledError
-            response = await self._wire.handle_async_request(outbound)
+            sent = time.monotonic()
+            try:
+                response = await self._wire.handle_async_request(outbound)
+            finally:
+                # Send to headers only. The claim above and the status commit below are
+                # host time, and the caller adds the time it takes to read the body.
+                self.network_seconds = time.monotonic() - sent
             self.authority.wire_status(self.claim, response.status_code)
             return response  # Caller consumes bounded raw stream, records evidence, then closes.
         except asyncio.CancelledError:

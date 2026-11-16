@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import statistics
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Annotated, Literal
@@ -212,6 +213,41 @@ def count_accounting(rows):
         "verified_count_responses": complete,
         "actual_count_requests": len(rows) if complete == len(rows) else None,
         "unknown_count_outcomes": len(rows) - complete,
+    }
+
+
+def _spread(values):
+    return {
+        "count": len(values),
+        "median": round(statistics.median(values), 6) if values else None,
+        "maximum": max(values) if values else None,
+    }
+
+
+def latency(results):
+    """Median and maximum over the episodes given. Descriptive: it sets no threshold.
+
+    Only an episode that sent at least one model call is measured. Results stored
+    before call timing existed, and episodes without a result, are counted and
+    never estimated. A call whose body was not read is a lower bound.
+    """
+    measured = [r for r in results if r and r.get("model_calls")]
+    calls = [c for r in measured for c in r["model_calls"]]
+
+    def seconds(kind):
+        return [c["seconds"] for c in calls if c["kind"] == kind]
+
+    return {
+        "basis": "descriptive_spread_no_threshold_unread_calls_are_lower_bounds",
+        "episodes_measured": len(measured),
+        "episodes_not_measured": len(results) - len(measured),
+        "task_seconds": _spread([r["latency_seconds"] for r in measured]),
+        "generation_calls_per_episode": _spread(
+            [sum(c["kind"] == "generation" for c in r["model_calls"]) for r in measured]
+        ),
+        "generation_seconds": _spread(seconds("generation")),
+        "count_seconds": _spread(seconds("count")),
+        "unread_calls": sum(not c["body_read"] for c in calls),
     }
 
 
@@ -677,6 +713,7 @@ class Comparison:
             counts = [dict(r) for r in db.execute("SELECT * FROM counts ORDER BY rowid")]
             wire = [dict(r) for r in db.execute("SELECT * FROM wire_attempts ORDER BY rowid")]
         state.pop("owner")
+        results = {e["slot"]: json.loads(e["result"]) if e["result"] else None for e in episodes}
         return {
             "mode": self.limits.execution_mode,
             "policy_hash": self.policy_hash,
@@ -697,10 +734,14 @@ class Comparison:
             "model_quality_established": False,
             **accounting(rows),
             **count_accounting(counts),
+            "latency": latency(list(results.values())),
             "providers": {
                 p: {
                     **accounting([r for r in rows if r["provider"] == p]),
                     **count_accounting([r for r in counts if r["provider"] == p]),
+                    "latency": latency(
+                        [results[e["slot"]] for e in episodes if e["provider"] == p]
+                    ),
                 }
                 for p in PROVIDERS
             },
@@ -709,7 +750,7 @@ class Comparison:
                     **accounting([r for r in rows if r["slot"] == e["slot"]]),
                     **count_accounting([r for r in counts if r["slot"] == e["slot"]]),
                     "status": e["status"],
-                    "result": json.loads(e["result"]) if e["result"] else None,
+                    "result": results[e["slot"]],
                 }
                 for e in episodes
             },

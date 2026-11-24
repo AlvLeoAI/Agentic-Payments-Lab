@@ -9,12 +9,14 @@ import asyncio
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 
 import httpx2
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from ..domain import canonical
 from ..runtime import Runtime
+from ..storage import blocking_deadline
 from .boundary import Boundary
 from .call_budget import BudgetDenied
 from .campaign import state_witness
@@ -315,6 +317,12 @@ def assess(entry, before, after, termination, tools):
     }
 
 
+@asynccontextmanager
+async def _blocking(seconds):
+    with blocking_deadline(seconds):
+        yield
+
+
 async def _episode(comparison, entry, responder, *, model_factory=NativeMockModel):
     comparison.begin(entry)  # Claim before opening existing fixtures or constructing a client.
     path = comparison.path.parent / "states" / entry["fixture"]
@@ -337,7 +345,9 @@ async def _episode(comparison, entry, responder, *, model_factory=NativeMockMode
             termination, control = "not_applicable_paid_prerequisite_absent", True
         else:
             model = model_factory(comparison, entry, responder)
-            async with asyncio.timeout(comparison.limits.timeout_seconds):
+            limit = comparison.limits.timeout_seconds
+            # The simulator's lock waits share the episode deadline (NFR-L1).
+            async with asyncio.timeout(limit), _blocking(limit):
                 for _ in range(comparison.limits.requests_per_episode):
                     evidence, request_id = await model.respond(transcript)
                     if asyncio.current_task().cancelling():

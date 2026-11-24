@@ -102,7 +102,12 @@ independent of SQLite lock-wait timing, and `da43583` added contract tests for
 three requirement gaps; none of these changed runtime behavior. `de0c8d0` does:
 the paired comparison now stores per-call model duration in each episode result
 and reports its median and maximum. It changes no authorization, payment or
-admission path, and the journal schema is unchanged. None has a retained local
+admission path, and the journal schema is unchanged. `f05a74d` also changes
+runtime behavior: inside an agent run or a comparison episode, lock waits are
+capped by the time left before the deadline, and a purchase starts no new step
+after it. A purchase that settles after the deadline is left undelivered for
+operator reconciliation. It changes no authorization or accounting rule and no
+schema. None has a retained local
 evidence run of its own: hosted CI runs the full isolated suite on each pull
 request. Every other change since `cb91e9c` is documentation or the
 CI job timeout. To check, run `git diff --stat cb91e9c..HEAD`.

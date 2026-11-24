@@ -107,7 +107,10 @@ runtime behavior: inside an agent run or a comparison episode, lock waits are
 capped by the time left before the deadline, and a purchase starts no new step
 after it. A purchase that settles after the deadline is left undelivered for
 operator reconciliation. It changes no authorization or accounting rule and no
-schema. None has a retained local
+schema. `fe54a55` changes one recorded value: a fresh version-2 preflight whose
+30-second deadline expires now stores the diagnostic reason `timeout` where it
+stored `cancelled`. Stop behavior, the journal schema and the retained
+version-1 preflight are unchanged. None has a retained local
 evidence run of its own: hosted CI runs the full isolated suite on each pull
 request. Every other change since `cb91e9c` is documentation or the
 CI job timeout. To check, run `git diff --stat cb91e9c..HEAD`.

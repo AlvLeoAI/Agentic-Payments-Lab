@@ -20,8 +20,8 @@ payments are simulated; see the [README](../README.md) for scope and limits.
 - Test references are `file` and test name. Paths are relative to `tests/`.
 
 Status as of 2026-11-24, including the tests added in `da43583`, the comparison
-call timing added in `de0c8d0` and the deadline-bounded lock waits added in
-`f05a74d`. The latency requirements were added on 2026-11-16 and have not been
+call timing added in `de0c8d0`, the deadline-bounded lock waits added in
+`f05a74d` and the preflight timeout diagnostic fixed in `fe54a55`. The latency requirements were added on 2026-11-16 and have not been
 measured.
 
 ## Functional requirements
@@ -612,9 +612,13 @@ Expiry of timeouts that were only configured before, in
   transport sets the limit on every HTTP phase, and a timeout raised by the HTTP
   layer keeps the reservation and blocks the pilot. The timeout is raised by the
   test; no socket timeout is exercised.
-- `test_preflight_deadline_expiry_is_recorded_as_timeout` (two cases, strict
-  `xfail`): both preflight 30 s deadlines expire, the preflight stops and
-  refuses a restart, but the diagnostic reason is `cancelled`. See gap 16.
+- `test_preflight_deadline_expiry_is_recorded_as_timeout` (two cases): each of
+  the two preflight 30 s deadlines expires while the request is in flight. The
+  preflight stops, keeps the attempt as an unknown outcome, and records the
+  diagnostic stage `transport` with reason `timeout`.
+- `test_preflight_deadline_expiry_during_the_body_is_recorded_as_timeout` (two
+  cases): the same two deadlines expire while the response body is being read.
+  The recorded stage is `body` and the reason is `timeout`.
 
 Where the requirement is not met:
 
@@ -641,9 +645,9 @@ Where the requirement is not met:
 - **A purchase made without the agent has no deadline.**
 - **Scripted and injected models have no per-call timeout.** They run in process;
   only the run deadline bounds them.
-- **An expired preflight deadline is recorded as `cancelled`.** The run stops
-  fail-closed, but the diagnostic cannot tell a timeout from an operator
-  cancellation (gap 16).
+- **The comparison journal and the generation probe still store the wire code
+  `cancelled` when their own deadlines expire.** `fe54a55` corrected this for
+  the preflight diagnostic only. No test asserts the code in the other two.
 
 #### NFR-L2 Application overhead budget
 
@@ -756,18 +760,18 @@ introduced, the lock wait must be revisited together with the latency targets.
 | 9 | NFR-L1 | No tool call has its own timeout, and the in-process merchant client sets none. Only the run or episode deadline bounds a tool call. |
 | 10 | NFR-L1 | Closed in `f05a74d` for the agent run and the comparison episode: lock waits are capped by the time left, a purchase starts no new step after the deadline, and tests let the deadline pass during the payment call. Still open: the payment adapter call is synchronous, and paths without a declared deadline keep the 30-second wait. |
 | 11 | NFR-L1 | The deadline covers the model and tool loop only, not setup or finalization. It is per run, not per task, and a purchase made without the agent has none. The per-run part can wait, because replay creates no new exposure. |
-| 12 | NFR-L1 | Closed in `f05a74d`, with two limits: the pilot transport test raises the HTTP layer's timeout and exercises no socket timeout, and the two preflight cases are strict `xfail` because of gap 16. |
+| 12 | NFR-L1 | Closed in `f05a74d`, with one limit: the pilot transport test raises the HTTP layer's timeout and exercises no socket timeout. The two preflight cases were strict `xfail` until `fe54a55` closed gap 16. |
 | 13 | NFR-L2 | Not measured and not tested. No code separates non-model time from model time. |
 | 14 | NFR-L3 | Closed in `de0c8d0` for the paired comparison runner, which records per-call model duration and total task time. Still open elsewhere: the agent report, the live pilot and the generation probe record no timing, the campaign runner records no per-call duration, and no published live evidence contains either. |
 | 15 | NFR-L3 | Partly closed in `de0c8d0`: the comparison report gives the median and maximum, overall and per provider. Still open: no latency threshold, because the provider decision rule is not written. |
-| 16 | NFR-L1 | An expired preflight deadline is recorded with the diagnostic reason `cancelled`, not `timeout`. The shared provider wire reports the deadline as a cancellation first, and the preflight keeps only its first failure. The run still stops and refuses a restart. Found by the expiry tests in `f05a74d`; not fixed. |
+| 16 | NFR-L1 | Closed in `fe54a55`. An expired preflight deadline was recorded with the diagnostic reason `cancelled`, because the shared provider wire reports the deadline as a cancellation and the preflight keeps only its first failure. The preflight now records `timeout` when one of its own deadlines has passed; a real cancellation is still `cancelled`. The shared wire is unchanged, so the comparison journal and the generation probe still store `cancelled` for their own expired deadlines. |
 
 Gaps 1, 2, 4 and 5 are closed and keep their numbers so the others stay stable.
 Gap 7 is a small test addition. Gaps 3 and 6 are limits of what a unit test can
 show. Gap 8 is planned work. Gaps 9 to 15 were added with the latency requirements
 on 2026-11-16. Gap 14 is closed for the comparison runner only, and gap 15 still
-lacks its threshold. Gap 16 was found on 2026-11-24 and is a defect in an existing
-diagnostic, to be fixed in its own change.
+lacks its threshold. Gap 16 was found on 2026-11-24, a defect in an existing
+diagnostic, and closed the same day in its own change.
 
 Planned order for the latency gaps, as three separate tasks:
 
@@ -776,7 +780,8 @@ Planned order for the latency gaps, as three separate tasks:
    waits for the provider decision rule.
 2. **Gaps 10 and 12:** bound the blocking steps by deriving lock waits from the
    remaining deadline, and add expiry tests for the three timeouts that are
-   configured but never tested. Done in `f05a74d`, which also found gap 16.
+   configured but never tested. Done in `f05a74d`, which also found gap 16
+   (closed in `fe54a55`).
 3. **Gap 9:** per-tool timeouts on the merchant client. The risk is low while the
    merchant is in process. It is mandatory before the x402 phase introduces real
    HTTP.

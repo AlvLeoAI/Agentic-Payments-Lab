@@ -28,6 +28,7 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.shared import Reasoning
 
 from ..coordinator import BuyerSession
+from ..storage import blocking_deadline, expired
 from .boundary import ARGUMENTS, Boundary
 from .contracts import AgentReport, Explanation, Goal, ModelUsage, Settings, ToolError, ToolEvent
 from .offline_x402 import OfflineBoundary, OfflineX402Buyer
@@ -206,8 +207,11 @@ class BoundedModel(Model):
                     result = await self.boundary.invoke(name, raw)
                 except Exception:
                     # A write may have committed before an error. Never undo accounting.
-                    self.event(name, "operation_error")
-                    self.stop("tool_error")
+                    # A step refused or a lock wait cut short by the run deadline is
+                    # that deadline expiring, not a separate tool failure.
+                    late = expired()
+                    self.event(name, "timeout" if late else "operation_error")
+                    self.stop("timeout" if late else "tool_error")
                 encoded = result.model_dump_json()
                 if len(encoded.encode()) > 4096:
                     self.event(name, "output_limit")
@@ -312,16 +316,18 @@ async def run_buyer(
     try:
         store.start(bounded.report("running"))
         async with asyncio.timeout(settings.timeout_seconds):
-            result = await Runner.run(
-                agent,
-                "Operator constraints (read-only): " + constraints.model_dump_json(),
-                max_turns=settings.max_turns,
-                run_config=RunConfig(
-                    tracing_disabled=True,
-                    trace_include_sensitive_data=False,
-                    tool_execution=ToolExecutionConfig(max_function_tool_concurrency=1),
-                ),
-            )
+            # Tool tasks inherit this context, so their lock waits share the deadline.
+            with blocking_deadline(settings.timeout_seconds):
+                result = await Runner.run(
+                    agent,
+                    "Operator constraints (read-only): " + constraints.model_dump_json(),
+                    max_turns=settings.max_turns,
+                    run_config=RunConfig(
+                        tracing_disabled=True,
+                        trace_include_sensitive_data=False,
+                        tool_execution=ToolExecutionConfig(max_function_tool_concurrency=1),
+                    ),
+                )
             if offline_x402:
                 boundary.cancellation_fence()
             explanation = Explanation.model_validate(result.final_output).explanation

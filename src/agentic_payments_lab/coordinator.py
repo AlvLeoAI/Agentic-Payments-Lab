@@ -22,6 +22,7 @@ from .domain import (
 from .ledger import Ledger
 from .payments import PaymentAdapter
 from .provider import MerchantClient
+from .storage import payment_step, require_time
 
 
 class Checkpoint(StrEnum):
@@ -62,6 +63,10 @@ class Coordinator:
     async def purchase(
         self, task_id: str, request: PurchaseRequest, quote: Quote
     ) -> PurchaseOutcome:
+        # The deadline is consulted before each step that would start new work. It
+        # is not consulted between dispatch and settlement: that is one in-flight
+        # step, and cutting it off would only turn a known outcome into an unknown one.
+        require_time()
         task = self.ledger.task(task_id)
         created = self.ledger.reserve(
             task.purchase_id, request, quote, task.grant_id, self.clock.now()
@@ -73,17 +78,21 @@ class Coordinator:
             return outcome
         self.checkpoint(Checkpoint.AFTER_RESERVATION)
         if outcome.payment_state == PaymentState.RESERVED:
+            require_time()  # Not dispatched: the reservation stays held for the operator.
             intent = self.ledger.claim(task.purchase_id, self.clock.now())
             if intent:
-                self.checkpoint(Checkpoint.AFTER_DISPATCH)
-                try:
-                    result = self.payments.execute(intent)
-                except Exception:
-                    # Never put exception bodies (potential proofs/secrets) in ordinary records.
-                    result = Resolution(status="unknown", reason="adapter_response_unavailable")
-                self.checkpoint(Checkpoint.AFTER_PAYMENT)
-                self.ledger.resolve(task.purchase_id, result, self.clock.now())
-                self.checkpoint(Checkpoint.AFTER_SETTLEMENT)
+                with payment_step():
+                    self.checkpoint(Checkpoint.AFTER_DISPATCH)
+                    try:
+                        result = self.payments.execute(intent)
+                    except Exception:
+                        # Never put exception bodies (potential proofs/secrets) in
+                        # ordinary records.
+                        result = Resolution(status="unknown", reason="adapter_response_unavailable")
+                    self.checkpoint(Checkpoint.AFTER_PAYMENT)
+                    self.ledger.resolve(task.purchase_id, result, self.clock.now())
+                    self.checkpoint(Checkpoint.AFTER_SETTLEMENT)
+        require_time()  # Delivery is a new step. Settled accounting is already durable.
         await self._deliver(task.purchase_id)
         return self.ledger.outcome(task.purchase_id)
 

@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import sqlite3
-from contextlib import closing, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -260,6 +260,7 @@ class Preflight:
     def __init__(self, path):
         self.path, self._owner = Path(path).resolve(), None
         self._stage, self._first_failure, self._diagnostic_unavailable = "setup", None, False
+        self._deadlines = []
         self._active_slot, self._observed_http_status = None, None
         with self.connect() as db:
             if db.execute("PRAGMA user_version").fetchone()[0] != 2:
@@ -578,7 +579,30 @@ class Preflight:
                 (stage, reason, slot, status, http_status),
             )
 
+    @asynccontextmanager
+    async def deadline(self, seconds):
+        """A request deadline that `fail` can tell apart from an operator cancellation."""
+        scope = asyncio.timeout(seconds)
+        self._deadlines.append(scope)
+        try:
+            async with scope:
+                yield
+        finally:
+            self._deadlines.remove(scope)
+
+    def _deadline_passed(self):
+        try:
+            now = asyncio.get_running_loop().time()
+        except RuntimeError:
+            return False
+        return any(s.when() is not None and s.when() <= now for s in self._deadlines)
+
     def fail(self, stage, reason):
+        # An expired deadline reaches the wire and the exchange as a task cancellation
+        # before asyncio turns it into TimeoutError. Record what it was, not how it
+        # arrived. Only a deadline that is still active and already past counts.
+        if reason == "cancelled" and self._deadline_passed():
+            reason = "timeout"
         # Remember locally BEFORE best-effort persistence; secondary cleanup never
         # overwrites the first cause, observations or pending-attempt uncertainty.
         if stage not in DIAGNOSTIC_STAGES or reason not in DIAGNOSTIC_REASONS:
@@ -698,7 +722,7 @@ class PreflightExchange(httpx2.AsyncBaseTransport):
         response = None
         try:
             self.preflight._stage = "transport"
-            async with asyncio.timeout(30):
+            async with self.preflight.deadline(30):
                 response = await self.wire.handle_async_request(request)
                 self.preflight._stage = "http"
                 if response.status_code != 200:
@@ -832,7 +856,7 @@ async def _run_preflight(
             http = DefaultAsyncHttpxClient(
                 transport=exchange, trust_env=False, follow_redirects=False, timeout=30
             )
-            async with asyncio.timeout(30):
+            async with preflight.deadline(30):
                 preflight._stage = "sdk_response"
                 if provider == "openai":
                     client = AsyncOpenAI(

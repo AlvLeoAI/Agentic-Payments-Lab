@@ -104,11 +104,28 @@ def test_live_probe_request_deadline_expires_without_retry(tmp_path, monkeypatch
     assert all(k.get_secret_value() not in json.dumps(result) for k in live_probe.KEYS.values())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known defect: the shared provider wire reports an expired deadline as "
-    "'cancelled' first, and the preflight keeps only its first failure.",
-)
+@pytest.mark.parametrize("index", [0, 1], ids=["step_deadline", "exchange_deadline"])
+def test_preflight_deadline_expiry_during_the_body_is_recorded_as_timeout(
+    tmp_path, monkeypatch, index
+):
+    preflight = initialize_preflight(tmp_path / "p")
+    deadlines, calls = Deadlines(monkeypatch), []
+
+    class Stalled(httpx2.AsyncByteStream):
+        async def __aiter__(self):
+            await deadlines.expire_and_stall(30, index)
+            yield b""
+
+    async def send(wire_request):
+        calls.append(1)
+        return httpx2.Response(200, stream=Stalled())
+
+    run_preflight(preflight, lambda _: httpx2.MockTransport(send))
+    report = check_failure(preflight, calls, "body", "timeout")
+    assert report["state"]["status"] == "stopped"
+    assert report["observed_http_responses"] == report["unknown_outcomes"] == 1
+
+
 @pytest.mark.parametrize("index", [0, 1], ids=["step_deadline", "exchange_deadline"])
 def test_preflight_deadline_expiry_is_recorded_as_timeout(tmp_path, monkeypatch, index):
     preflight = initialize_preflight(tmp_path / "p")
